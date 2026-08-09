@@ -950,6 +950,10 @@ func parseInnerList(inputString string) (v InnerList, rest string, err error) {
 		}
 
 		// 4. Append item to inner_list.
+		// Removes some allocations for lists with more than 2 items
+		if innerList.Members == nil {
+			innerList.Members = make([]Item, 0, 4)
+		}
 		innerList.Members = append(innerList.Members, item)
 
 		// 5. If the first character of input_string is not SP or ")", fail parsing.
@@ -1080,6 +1084,10 @@ func parseList(inputString string) (v List, rest string, err error) {
 		member, inputString, err = parseItemOrInnerList(inputString)
 		if err != nil {
 			return List{}, "", err
+		}
+		// Removes some allocations for lists with more than 2 items
+		if members == nil {
+			members = make([]ItemOrInnerList, 0, 4)
 		}
 		members = append(members, member)
 

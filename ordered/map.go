@@ -101,8 +101,10 @@ func (m *Map[K, V]) Len() int {
 //
 // If the key already exists in the map, the value replaces the existing value, keeping the position of the old value.
 func (m *Map[K, V]) Set(key K, value V) {
+	// Pre-allocate a little space to avoid some allocations in the common case
+	const initialCap = 4
 	if m.internal == nil {
-		m.internal = &internalMap[K, V]{m: make(map[K]V)}
+		m.internal = &internalMap[K, V]{m: make(map[K]V, initialCap), keys: make([]K, 0, initialCap)}
 	}
 	if _, ok := m.internal.m[key]; !ok {
 		m.internal.keys = append(m.internal.keys, key)
