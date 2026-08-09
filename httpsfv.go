@@ -247,33 +247,32 @@ func parseKey(inputString string) (key string, rest string, err error) {
 	}
 
 	// 2. Let output_string be an empty string.
-	// TODO: Optimize
-	var outputString string
+	// -> Replaced with index to avoid allocations
+	var curr int
 
 	// 3. While input_string is not empty:
-	for inputString != "" {
+	for inputString[curr:] != "" {
 		// 1. If the first character of input_string is not one of lcalpha, DIGIT, "_", "-", ".", or "*", return output_string.
 		switch {
-		case isLcalpha(inputString[0]):
-		case isRFC5234DIGIT(inputString[0]):
-		case inputString[0] == '_':
-		case inputString[0] == '-':
-		case inputString[0] == '.':
-		case inputString[0] == '*':
+		case isLcalpha(inputString[curr]):
+		case isRFC5234DIGIT(inputString[curr]):
+		case inputString[curr] == '_':
+		case inputString[curr] == '-':
+		case inputString[curr] == '.':
+		case inputString[curr] == '*':
 		default:
-			return outputString, inputString, nil
+			return inputString[:curr], inputString[curr:], nil
 		}
 
 		// 2. Let char be the result of consuming the first character of input_string.
-		var char byte
-		char, inputString = inputString[0], inputString[1:]
+		// -> Optimized away
 
 		// 3. Append char to output_string.
-		outputString += string(char)
+		curr++
 	}
 
 	// 4. Return output_string.
-	return outputString, inputString, nil
+	return inputString[:curr], inputString[curr:], nil
 }
 
 // BareItem represents a simple item without parameters.
@@ -385,8 +384,8 @@ func parseIntegerOrDecimal(inputString string) (v BareItem, rest string, err err
 	sign := 1
 
 	// 3. Let input_number be an empty string.
-	// TODO: Optimize to avoid allocations
-	var inputNumber string
+	// -> Replaced with index to avoid allocations
+	var curr int
 
 	// 4. If the first character of input_string is "-", consume it and set sign to -1.
 	if inputString != "" && inputString[0] == '-' {
@@ -403,35 +402,35 @@ func parseIntegerOrDecimal(inputString string) (v BareItem, rest string, err err
 	}
 
 	// 7. While input_string is not empty:
-	for inputString != "" {
-		var char byte
-
+	for curr < len(inputString) {
 		// 1. Let char be the result of consuming the first character of input_string.
-		char, inputString = inputString[0], inputString[1:]
+		// -> Consuming optimized away
+		char := inputString[curr]
 
 		// 2. If char is a DIGIT, append it to input_number.
 		if isRFC5234DIGIT(char) {
-			inputNumber += string(char)
+			curr++
 			continue
 		}
 
 		// 3. Else, if type is "integer" and char is ".":
 		if type_ == BareItemTypeInteger && char == '.' {
 			// 1. If input_number contains more than 12 characters, fail parsing.
-			if len(inputNumber) > 12 {
+			if curr > 12 {
 				return BareItem{}, "", fmt.Errorf("%w: integer part too long", ErrInvalidIntegerOrDecimal)
 			}
 
 			// 2. Otherwise, append char to input_number and set type to "decimal".
-			inputNumber += string(char)
+			curr++
 			type_ = BareItemTypeDecimal
 			continue
 		}
 
 		// 4. Otherwise, prepend char to input_string, and exit the loop.
-		inputString = string(char) + inputString
 		break
 	}
+
+	inputNumber, inputString := inputString[:curr], inputString[curr:]
 
 	// 7.5. If type is "integer" and input_number contains more than 15 characters, fail parsing.
 	if type_ == BareItemTypeInteger && len(inputNumber) > 15 {
@@ -485,8 +484,8 @@ func parseString(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.5
 	//
 	// 1. Let output_string be an empty string.
-	// TODO: Optimize
-	var outputString string
+	// -> Replaced with index to avoid allocations
+	var curr int
 
 	// 2. If the first character of input_string is not DQUOTE, fail parsing.
 	if inputString == "" || inputString[0] != _DQUOTE {
@@ -495,24 +494,28 @@ func parseString(inputString string) (v BareItem, rest string, err error) {
 	}
 
 	// 3. Discard the first character of input_string.
-	inputString = inputString[1:]
+	curr++
+
+	var outputString strings.Builder
+	outputStringEnd := 1
 
 	// 4. While input_string is not empty:
-	for inputString != "" {
+	for curr < len(inputString) {
 		// 1. Let char be the result of consuming the first character of input_string.
-		var char byte
-		char, inputString = inputString[0], inputString[1:]
+		char := inputString[curr]
+		curr++
 
 		// 2. If char is a backslash ("\"):
 		if char == '\\' {
 			// 1. If input_string is now empty, fail parsing.
-			if inputString == "" {
+			if curr >= len(inputString) {
 				return BareItem{}, "", fmt.Errorf("%w: invalid escape sequence", ErrInvalidString)
 			}
 
 			// 2. Let next_char be the result of consuming the first character of input_string.
-			var nextChar byte
-			nextChar, inputString = inputString[0], inputString[1:]
+			// -> Consuming optimized away
+			nextChar := inputString[curr]
+			curr++
 
 			// 3. If next_char is not DQUOTE or "\", fail parsing.
 			if nextChar != _DQUOTE && nextChar != '\\' {
@@ -520,13 +523,18 @@ func parseString(inputString string) (v BareItem, rest string, err error) {
 			}
 
 			// 4. Append next_char to output_string.
-			outputString += string(nextChar)
+			outputString.WriteString(inputString[outputStringEnd : curr-2])
+			outputString.WriteByte(nextChar)
+			outputStringEnd = curr
 			continue
 		}
 
 		// 3. Else, if char is DQUOTE, return output_string.
 		if char == _DQUOTE {
-			return BareItem{Type: BareItemTypeString, String: outputString}, inputString, nil
+			if outputStringEnd == 1 {
+				return BareItem{Type: BareItemTypeString, String: inputString[1 : curr-1]}, inputString[curr:], nil
+			}
+			return BareItem{Type: BareItemTypeString, String: outputString.String()}, inputString[curr:], nil
 		}
 
 		// 4. Else, if char is in the range %x00-1f or %x7f-ff (i.e., it is not in VCHAR or SP), fail parsing.
@@ -535,7 +543,7 @@ func parseString(inputString string) (v BareItem, rest string, err error) {
 		}
 
 		// 5. Else, append char to output_string.
-		outputString += string(char)
+		// -> Optimized away
 	}
 
 	// 5. Reached the end of input_string without finding a closing DQUOTE; fail parsing.
@@ -553,26 +561,26 @@ func parseToken(inputString string) (v BareItem, rest string, err error) {
 	}
 
 	// 2. Let output_string be an empty string.
-	// TODO: Optimize
-	var outputString string
+	// -> Replaced with index to avoid allocations
+	var curr int
 
 	// 3. While input_string is not empty:
-	for inputString != "" {
+	for curr < len(inputString) {
 		// 1. If the first character of input_string is not in tchar, ":", or "/", return output_string.
-		if !isRFC9110tchar(inputString[0]) && inputString[0] != ':' && inputString[0] != '/' {
-			return BareItem{Type: BareItemTypeToken, Token: outputString}, inputString, nil
+		if !isRFC9110tchar(inputString[curr]) && inputString[curr] != ':' && inputString[curr] != '/' {
+			return BareItem{Type: BareItemTypeToken, Token: inputString[:curr]}, inputString[curr:], nil
 		}
 
 		// 2. Let char be the result of consuming the first character of input_string.
-		var char byte
-		char, inputString = inputString[0], inputString[1:]
+		// -> char optimized way
+		curr++
 
 		// 3. Append char to output_string.
-		outputString += string(char)
+		// -> Optimized away
 	}
 
 	// 4. Return output_string
-	return BareItem{Type: BareItemTypeToken, Token: outputString}, inputString, nil
+	return BareItem{Type: BareItemTypeToken, Token: inputString[:curr]}, inputString[curr:], nil
 }
 
 // parseByteSequence parses a byte sequence as specified in RFC 9651 section 4.2.7 "Parsing  Byte Sequence".
@@ -694,14 +702,17 @@ func parseDisplayString(inputString string) (v BareItem, rest string, err error)
 	inputString = inputString[2:]
 
 	// 3. Let byte_array be an empty byte array.
-	// TODO: Optimize
+	// -> Replaced with index to avoid allocations
+	var curr int
+
 	var byteArray []byte
+	byteArrayEnd := 0
 
 	// 4. While input_string is not empty:
-	for inputString != "" {
+	for curr < len(inputString) {
 		// 1. Let char be the result of consuming the first character of input_string.
-		var char byte
-		char, inputString = inputString[0], inputString[1:]
+		char := inputString[curr]
+		curr++
 
 		// 2. If char is in the range %x00-1f or %x7f-ff (i.e., it is not in VCHAR or SP), fail parsing.
 		if char <= 0x1f || char >= 0x7f {
@@ -711,11 +722,11 @@ func parseDisplayString(inputString string) (v BareItem, rest string, err error)
 		// 3. If char is "%":
 		if char == '%' {
 			// 1. Let octet_hex be the result of consuming two characters from input_string. If there are not two characters, fail parsing.
-			if len(inputString) < 2 {
+			if len(inputString[curr:]) < 2 {
 				return BareItem{}, "", fmt.Errorf("%w: missing characters after %%", ErrInvalidDisplayString)
 			}
-			var octetHex string
-			octetHex, inputString = inputString[:2], inputString[2:]
+			octetHex := inputString[curr : curr+2]
+			curr += 2
 
 			// 2. if octet_hex contains characters outside the range %x30-39 or %x61-66 (i.e., it is not in 0-9 or lowercase a-f), fail parsing.
 			// nolint:staticcheck
@@ -731,25 +742,37 @@ func parseDisplayString(inputString string) (v BareItem, rest string, err error)
 			octet := decodeHex(octetHex[0])*16 + decodeHex(octetHex[1])
 
 			// 4. Append octet to byte_array.
+			byteArray = append(byteArray, inputString[byteArrayEnd:curr-3]...)
 			byteArray = append(byteArray, octet)
+			byteArrayEnd = curr
 			continue
 		}
 
 		// 4. If char is DQUOTE:
 		if char == _DQUOTE {
 			// 1. Let unicode_sequence be the result of decoding byte_array as a UTF-8 string (Section 3 of [UTF8]). Fail parsing if decoding fails.
-			if !utf8.Valid(byteArray) {
+			var unicodeSequence string
+			if byteArray == nil {
+				unicodeSequence = inputString[:curr-1]
+			} else {
+				unicodeSequence = string(byteArray)
+			}
+
+			if !utf8.ValidString(unicodeSequence) {
 				return BareItem{}, "", fmt.Errorf("%w: invalid UTF-8 string", ErrInvalidDisplayString)
 			}
 
-			unicodeSequence := string(byteArray)
-
 			// 2. Return unicode_sequence:
-			return BareItem{Type: BareItemTypeDisplayString, DisplayString: unicodeSequence}, inputString, nil
+			return BareItem{Type: BareItemTypeDisplayString, DisplayString: unicodeSequence}, inputString[curr:], nil
 		}
 
 		// 5. Otherwise, if char is not %" or DQUOTE:
 		{
+			// -> Optimization
+			if byteArray == nil {
+				continue
+			}
+
 			// 1. Let byte be the result of applying ASCII encoding to char.
 			byte_ := char // already ASCII?
 
