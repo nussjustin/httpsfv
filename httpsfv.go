@@ -14,46 +14,52 @@ import (
 )
 
 var (
-	// ErrInvalidBareItem is returned when parsing a bare item fails as specified in RFC 9651 section 4.2.3.1 "Parsing a Bare Item".
+	// ErrInvalidBareItem is returned when parsing a bare item fails.
 	ErrInvalidBareItem = errors.New("invalid bare item")
 
-	// ErrInvalidBoolean is returned when parsing a boolean fails as specified in RFC 9651 section 4.2.8 "Parsing a Boolean".
+	// ErrInvalidBoolean is returned when parsing a boolean fails.
 	ErrInvalidBoolean = errors.New("invalid boolean")
 
-	// ErrInvalidByteSequence is returned when parsing a byte sequence fails as specified in RFC 9651 section 4.2.7 "Parsing a Byte Sequence".
+	// ErrInvalidByteSequence is returned when parsing a byte sequence fails.
 	ErrInvalidByteSequence = errors.New("invalid byte sequence")
 
-	// ErrInvalidDate is returned when parsing a date fails as specified in RFC 9651 section 4.2.9 "Parsing a Date".
+	// ErrInvalidDate is returned when parsing a date fails.
 	ErrInvalidDate = errors.New("invalid date")
 
-	// ErrInvalidDictionary is returned when parsing a dictionary fails as specified in RFC 9651 section 4.2.2 "Parsing a Dictionary".
+	// ErrInvalidDictionary is returned when parsing a dictionary fails.
 	ErrInvalidDictionary = errors.New("invalid dictionary")
 
-	// ErrInvalidDisplayString is returned when parsing a display string fails as specified in RFC 9651 section 4.2.10 "Parsing a Display String".
+	// ErrInvalidDisplayString is returned when parsing a display string fails.
 	ErrInvalidDisplayString = errors.New("invalid display string")
 
-	// ErrInvalidInnerList is returned when parsing an inner list fails as specified in RFC 9651 section 4.2.1.2 "Parsing an Inner List".
+	// ErrInvalidInnerList is returned when parsing an inner list fails.
 	ErrInvalidInnerList = errors.New("invalid inner list")
 
-	// ErrInvalidIntegerOrDecimal is returned when parsing an integer or decimal fails as specified in RFC 9651 section 4.2.4 "Parsing an Integer or Decimal".
+	// ErrInvalidIntegerOrDecimal is returned when parsing an integer or decimal fails.
 	ErrInvalidIntegerOrDecimal = errors.New("invalid integer or decimal")
 
-	// ErrInvalidKey is returned when parsing a key fails as specified in RFC 9651 section 4.2.3.3 "Parsing a Key".
+	// ErrInvalidItem is returned when parsing an item fails.
+	ErrInvalidItem = errors.New("invalid item")
+
+	// ErrInvalidKey is returned when parsing a key fails.
 	ErrInvalidKey = errors.New("invalid key")
 
-	// ErrInvalidList is returned when parsing a list fails as specified in RFC 9651 section 4.2.1 "Parsing a List".
+	// ErrInvalidList is returned when parsing a list fails.
 	ErrInvalidList = errors.New("invalid list")
 
-	// ErrInvalidString is returned when parsing a string fails as specified in RFC 9651 section 4.2.5 "Parsing a String".
+	// ErrInvalidParameters is returned when parsing parameters fails.
+	ErrInvalidParameters = errors.New("invalid parameters")
+
+	// ErrInvalidString is returned when parsing a string fails.
 	ErrInvalidString = errors.New("invalid string")
 
-	// ErrInvalidToken is returned when parsing a token fails as specified in RFC 9651 section 4.2.6 "Parsing a Token".
+	// ErrInvalidToken is returned when parsing a token fails.
 	ErrInvalidToken = errors.New("invalid token")
 
-	// ErrNonAsciiInput is returned when parsing a structured field containing non-ASCII characters as specified in RFC 9651 section 4.2 "Parsing Structured Fields".
+	// ErrNonAsciiInput is returned when parsing a structured field containing non-ASCII characters.
 	ErrNonAsciiInput = errors.New("non-ascii input")
 
-	// ErrTrailingData is returned when parsing a structured field containing trailing data as specified in RFC 9651 section 4.2 "Parsing Structured Fields".
+	// ErrTrailingData is returned when parsing a structured field containing trailing data.
 	ErrTrailingData = errors.New("trailing data")
 )
 
@@ -237,12 +243,12 @@ func parseKey(inputString string) (key string, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#name-parsing-a-key
 	//
 	// 1. If the first character of input_string is not lcalpha or "*", fail parsing.
-	var first byte
-	if inputString != "" {
-		first = inputString[0]
+
+	if inputString == "" {
+		return "", "", ErrInvalidKey
 	}
 
-	if !isLcalpha(first) && first != '*' {
+	if first := inputString[0]; !isLcalpha(first) && first != '*' {
 		return "", "", ErrInvalidKey
 	}
 
@@ -311,8 +317,11 @@ type BareItem struct {
 type BareItemType uint8
 
 const (
+	// BareItemTypeInvalid is the zero value of [BareItemType] and not a valid value.
+	BareItemTypeInvalid BareItemType = iota
+
 	// BareItemTypeBoolean denotes a boolean value as specified in RFC 9651 section 3.3.6.
-	BareItemTypeBoolean BareItemType = iota
+	BareItemTypeBoolean
 
 	// BareItemTypeByteSequence denotes a byte sequence as specified in RFC 9651 section 3.3.5.
 	BareItemTypeByteSequence
@@ -348,33 +357,39 @@ func parseBareItem(inputString string) (v BareItem, rest string, err error) {
 	switch {
 	case first == '-' || isRFC5234DIGIT(first):
 		// 1. If the first character of input_string is a "-" or a DIGIT, return the result of running Parsing an Integer or Decimal (Section 4.2.4) with input_string.
-		return parseIntegerOrDecimal(inputString)
+		return parseBareItemIntegerOrDecimal(inputString)
 	case first == _DQUOTE:
 		// 2. If the first character of input_string is a DQUOTE, return the result of running Parsing a String (Section 4.2.5) with input_string.
-		return parseString(inputString)
+		v, rest, err = parseBareItemString(inputString)
 	case isRFC5234ALPHA(first) || first == '*':
 		// 3. If the first character of input_string is an ALPHA or "*", return the result of running Parsing a Token (Section 4.2.6) with input_string
-		return parseToken(inputString)
+		return parseBareItemToken(inputString)
 	case first == ':':
 		// 4. If the first character of input_string is ":", return the result of running Parsing a Byte Sequence (Section 4.2.7) with input_string.
-		return parseByteSequence(inputString)
+		v, rest, err = parseBareItemByteSequence(inputString)
 	case first == '?':
 		// 5. If the first character of input_string is "?", return the result of running Parsing a Boolean (Section 4.2.8) with input_string.
-		return parseBoolean(inputString)
+		v, rest, err = parseBareItemBoolean(inputString)
 	case first == '@':
 		// 6. If the first character of input_string is "@", return the result of running Parsing a Date (Section 4.2.9) with input_string.
-		return parseDate(inputString)
+		v, rest, err = parseBareItemDate(inputString)
 	case first == '%':
 		// 7. If the first character of input_string is "%", return the result of running Parsing a Display String (Section 4.2.10) with input_string.
-		return parseDisplayString(inputString)
+		v, rest, err = parseBareItemDisplayString(inputString)
 	default:
 		// 8. Otherwise, the item type is unrecognized; fail parsing
 		return BareItem{}, "", ErrInvalidBareItem
 	}
+
+	if err != nil {
+		err = errors.Join(ErrInvalidBareItem, err)
+	}
+
+	return
 }
 
-// parseIntegerOrDecimal parses an integer or decimal as specified in RFC 9651 section 4.3.4 "Parsing an Integer or Decimal".
-func parseIntegerOrDecimal(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemIntegerOrDecimal parses an integer or decimal as specified in RFC 9651 section 4.3.4 "Parsing an Integer or Decimal".
+func parseBareItemIntegerOrDecimal(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#name-parsing-an-integer-or-decim
 	//
 	// 1. Let type be "integer".
@@ -479,8 +494,8 @@ func parseIntegerOrDecimal(inputString string) (v BareItem, rest string, err err
 	return BareItem{Type: type_, Decimal: outputNumberFloat}, inputString, nil
 }
 
-// parseString parses a string as specified in RFC 9651 section 4.2.5 "Parsing a String".
-func parseString(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemString parses a string as specified in RFC 9651 section 4.2.5 "Parsing a String".
+func parseBareItemString(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.5
 	//
 	// 1. Let output_string be an empty string.
@@ -489,7 +504,6 @@ func parseString(inputString string) (v BareItem, rest string, err error) {
 
 	// 2. If the first character of input_string is not DQUOTE, fail parsing.
 	if inputString == "" || inputString[0] != _DQUOTE {
-		// Note: Unreachable as parseString is only called when we already checked the first character.
 		return BareItem{}, "", fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidString)
 	}
 
@@ -550,13 +564,12 @@ func parseString(inputString string) (v BareItem, rest string, err error) {
 	return BareItem{}, "", fmt.Errorf("%w: missing closing quote", ErrInvalidString)
 }
 
-// parseToken parses a token as specified in RFC 9651 section 4.2.6 "Parsing a Token".
-func parseToken(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemToken parses a token as specified in RFC 9651 section 4.2.6 "Parsing a Token".
+func parseBareItemToken(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.6
 	//
 	// 1. If the first character of input_string is not ALPHA or "*", fail parsing
 	if inputString == "" || (!isRFC5234ALPHA(inputString[0]) && inputString[0] != '*') {
-		// Note: Unreachable as parseToken is only called when we already checked the first character.
 		return BareItem{}, "", fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidToken)
 	}
 
@@ -583,17 +596,15 @@ func parseToken(inputString string) (v BareItem, rest string, err error) {
 	return BareItem{Type: BareItemTypeToken, Token: inputString[:curr]}, inputString[curr:], nil
 }
 
-// parseByteSequence parses a byte sequence as specified in RFC 9651 section 4.2.7 "Parsing  Byte Sequence".
-func parseByteSequence(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemByteSequence parses a byte sequence as specified in RFC 9651 section 4.2.7 "Parsing  Byte Sequence".
+func parseBareItemByteSequence(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#name-parsing-a-byte-sequence
 	//
 	// 1. If the first character of input_string is not ":", fail parsing.
 	if inputString == "" || inputString[0] != ':' {
-		// Note: Unreachable as parseByteSequence is only called when we already checked the first character.
 		return BareItem{}, "", fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidByteSequence)
 	}
-
-	// 2. Discard the first character of input_string.
+	// 2. Discard the first character of input_string
 	inputString = inputString[1:]
 
 	// 3. If there is not a ":" character before the end of input_string, fail parsing.
@@ -625,20 +636,19 @@ func parseByteSequence(inputString string) (v BareItem, rest string, err error) 
 		binaryContent, err = base64.RawStdEncoding.DecodeString(b64Content)
 	}
 	if err != nil {
-		return BareItem{}, "", fmt.Errorf("%w: %s", ErrInvalidByteSequence, err)
+		return BareItem{}, "", errors.Join(ErrInvalidByteSequence, err)
 	}
 
 	// 8. Return binary_content.
 	return BareItem{Type: BareItemTypeByteSequence, ByteSequence: binaryContent}, inputString, nil
 }
 
-// parseBoolean parses a boolean as specified in RFC 9651 section 4.2.8 "Parsing a Boolean".
-func parseBoolean(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemBoolean parses a boolean as specified in RFC 9651 section 4.2.8 "Parsing a Boolean".
+func parseBareItemBoolean(inputString string) (v BareItem, rest string, err error) {
 	// https://www.rfc-editor.org/info/rfc9651/#section-4.2.8
 	//
 	// 1. If the first character of input_string is not "?", fail parsing
 	if inputString == "" || inputString[0] != '?' {
-		// Note: Unreachable as parseBoolean is only called when we already checked the first character.
 		return BareItem{}, "", fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidBoolean)
 	}
 
@@ -661,21 +671,20 @@ func parseBoolean(inputString string) (v BareItem, rest string, err error) {
 	return BareItem{}, "", ErrInvalidBoolean
 }
 
-// parseDate parses a date as specified in RFC 9651 section 4.2.9 "Parsing a Date".
-func parseDate(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemDate parses a date as specified in RFC 9651 section 4.2.9 "Parsing a Date".
+func parseBareItemDate(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.9
 	//
 	// 1. If the first character of input_string is not "@", fail parsing.
 	if inputString == "" || inputString[0] != '@' {
-		// Note: Unreachable as parseDate is only called when we already checked the first character.
-		return BareItem{}, "", fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidBoolean)
+		return BareItem{}, "", fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidDate)
 	}
 
 	// 2. Discard the first character of input_string.
 	inputString = inputString[1:]
 
 	// 3. Let output_date be the result of running Parsing an Integer or Decimal (Section 4.2.4) with input_string.
-	v, inputString, err = parseIntegerOrDecimal(inputString)
+	v, inputString, err = parseBareItemIntegerOrDecimal(inputString)
 	if err != nil {
 		return BareItem{}, "", ErrInvalidDate
 	}
@@ -689,8 +698,8 @@ func parseDate(inputString string) (v BareItem, rest string, err error) {
 	return BareItem{Type: BareItemTypeDate, Date: v.Integer}, inputString, nil
 }
 
-// parseDisplayString parses a display string as specified in RFC 9651 section 4.2.10 "Parsing a Display String".
-func parseDisplayString(inputString string) (v BareItem, rest string, err error) {
+// parseBareItemDisplayString parses a display string as specified in RFC 9651 section 4.2.10 "Parsing a Display String".
+func parseBareItemDisplayString(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.10
 	//
 	// 1. If the first two characters of input_string are not "%" followed by DQUOTE, fail parsing.
@@ -935,7 +944,7 @@ func parseInnerList(inputString string) (v InnerList, rest string, err error) {
 			// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
 			innerList.Parameters, inputString, err = parseParameters(inputString)
 			if err != nil {
-				return InnerList{}, "", fmt.Errorf("%w: %s", ErrInvalidInnerList, err)
+				return InnerList{}, "", errors.Join(ErrInvalidInnerList, err)
 			}
 
 			// 3. Return the tuple (inner_list, parameters).
@@ -982,13 +991,13 @@ func parseItem(inputString string) (v Item, rest string, err error) {
 	// 1. Let bare_item be the result of running Parsing a Bare Item (Section 4.2.3.1) with input_string.
 	item, inputString, err := parseBareItem(inputString)
 	if err != nil {
-		return Item{}, "", err
+		return Item{}, "", errors.Join(ErrInvalidItem, err)
 	}
 
 	// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
 	params, inputString, err := parseParameters(inputString)
 	if err != nil {
-		return Item{}, "", err
+		return Item{}, "", errors.Join(ErrInvalidItem, err)
 	}
 
 	// 3. Return the tuple (bare_item, parameters).
@@ -1083,7 +1092,7 @@ func parseList(inputString string) (v List, rest string, err error) {
 		var member ItemOrInnerList
 		member, inputString, err = parseItemOrInnerList(inputString)
 		if err != nil {
-			return List{}, "", err
+			return List{}, "", errors.Join(ErrInvalidList, err)
 		}
 		// Removes some allocations for lists with more than 2 items
 		if members == nil {
@@ -1159,7 +1168,7 @@ func parseParameters(inputString string) (v Parameters, rest string, err error) 
 		var paramKey string
 		paramKey, inputString, err = parseKey(inputString)
 		if err != nil {
-			return Parameters{}, inputString, fmt.Errorf("failed to parse parameter key: %w", err)
+			return Parameters{}, inputString, errors.Join(ErrInvalidParameters, err)
 		}
 
 		// 5. Let param_value be Boolean true.
@@ -1173,7 +1182,7 @@ func parseParameters(inputString string) (v Parameters, rest string, err error) 
 			// 2. Let param_value be the result of running Parsing a Bare Item (Section 4.2.3.1) with input_string.
 			paramValue, inputString, err = parseBareItem(inputString)
 			if err != nil {
-				return Parameters{}, inputString, fmt.Errorf("failed to parse parameter value: %w", err)
+				return Parameters{}, inputString, errors.Join(ErrInvalidParameters, err)
 			}
 		}
 
