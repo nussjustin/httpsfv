@@ -872,6 +872,129 @@ func BenchmarkParse(b *testing.B) {
 	})
 }
 
+var fuzzParseInputs = []string{
+	" ",
+	"(1,2)",
+	"(1\t2)",
+	"-",
+	"-a",
+	"123 a",
+	"123.",
+	"123.4567",
+	"1234567890123.4",
+	"1234567890123.456",
+	"1234567890123456",
+	"123; A=1",
+	"123; a=-",
+	"123; aB=1",
+	"123;",
+	":==dGVzdA==:",
+	":dGVzdA== :",
+	":dGVzdA==",
+	"?01",
+	"?2",
+	"@",
+	"@12345678901234567",
+	"@a",
+	"hêllo",
+	`"\a"`,
+	`"hello world`,
+	`"hello` + string([]byte{0}) + `"`,
+	`%"%Cc"`,
+	`%"%`,
+	`%"%cC"`,
+	`%"%c`,
+	`%"%ea"`,
+	`%"hello world`,
+	`%hello world"`,
+	`(1 (2 3) 4)`,
+	`(123; param=value`,
+	`(123`,
+	`(123a)`,
+	`a =b`,
+	`a= b`,
+	`a=(b=c)`,
+	`a=123a`,
+	`a=b,`,
+	`hello,`,
+	"    123",
+	"*hello",
+	"-123.456",
+	"-123456",
+	"123   ",
+	"123.456",
+	"123.456; param1=1.2;param2=2.3; param1=3.4",
+	"123456",
+	"123456789012.34",
+	"123456789012.345",
+	"123456789012345",
+	"123; *key_with-many.chars_*=1",
+	"123; bool; non-bool=1",
+	"123; param1=1;param2=2; param1=3",
+	"::",
+	":dGVzdA:",
+	":dGVzdA==:",
+	":dGVzdA==:; param1=:dmFsdWUx:;param2=:dmFsdWUy:; param1=:dmFsdWUz:",
+	"?0",
+	"?1",
+	"?1; param1=?0;param2=?0; param1=?1",
+	"@-123456",
+	"@123456",
+	"@123; param1=@1;param2=@2; param1=@3",
+	"Hello",
+	"h!#$%&'+-.^_`|~:/",
+	"h!#$%&'+-.^_`|~:/",
+	"hello",
+	"hello; param1=value1;param2=value2; param1=value3",
+	` ( 123 123.456 ) , ( ?0  ?1 ) , ( @123456 token ) , ( "string" %"display string" ) `,
+	` 123 , 123.456 , ?0 , ?1 , @123456 , token , "string" ` + "\t" + `,` + "\t" + ` %"display string" `,
+	`""`,
+	`"hello world"; param1="value 1";param2="value 2"; param1="value 3"`,
+	`"hello world"`,
+	`"with \" and \\"`,
+	`%"%c3%bcsers"`,
+	`%"hello world"; param1=%"value 1";param2=%"value 2"; param1=%"value 3"`,
+	`%"hello world"`,
+	`()`,
+	`123,123.456,(?0 ?1),@123456,token,("string" %"display string")`,
+	`a; param1=value1;param2=value2; param1=value3`,
+	`a=123 , b=123.456, c=?0 , d=?1 , e=@123456 , f=token, g="string" ` + "\t" + `,` + "\t" + ` h=%"display string" `,
+	`a=123,b=123.456,c=(?0 ?1),d=@123456,e=token,f=("string" %"display string")`,
+	`a`,
+	`outer; a=1; b=2; a=3, (inner; a=10; b=20; a=30); a=100; b=200; a=300`,
+	"@123.456",
+}
+
+func FuzzParse_Dictionary(f *testing.F) {
+	for _, input := range fuzzParseInputs {
+		f.Add(input)
+	}
+
+	f.Fuzz(func(t *testing.T, inputString string) {
+		_, _ = Parse[Dictionary](inputString)
+	})
+}
+
+func FuzzParse_Item(f *testing.F) {
+	for _, input := range fuzzParseInputs {
+		f.Add(input)
+	}
+
+	f.Fuzz(func(t *testing.T, inputString string) {
+		_, _ = Parse[Item](inputString)
+	})
+}
+
+func FuzzParse_List(f *testing.F) {
+	for _, input := range fuzzParseInputs {
+		f.Add(input)
+	}
+
+	f.Fuzz(func(t *testing.T, inputString string) {
+		_, _ = Parse[List](inputString)
+	})
+}
+
 func TestParseLines(t *testing.T) {
 	testsCases := []struct {
 		name      string
