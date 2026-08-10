@@ -67,6 +67,24 @@ var (
 	ErrTrailingData = errors.New("trailing data")
 )
 
+type prefixedError struct {
+	prefix error
+	err    error
+}
+
+func prefixError(prefix, err error) error {
+	return &prefixedError{prefix, err}
+}
+
+// Error implements the [error] interface.
+func (p *prefixedError) Error() string {
+	return fmt.Sprintf("%s: %s", p.prefix, p.err)
+}
+
+func (p *prefixedError) Unwrap() []error {
+	return []error{p.prefix, p.err}
+}
+
 // Parse parses the given string and returns as either [Dictionary], [Item] or [List] based on the generic type
 // parameter T, as specified in RFC 9651 section 4.2.
 //
@@ -298,7 +316,7 @@ func serializeKey(dst []byte, inputKey string) ([]byte, error) {
 	//
 	// 1. Convert input_key into a sequence of ASCII characters; if conversion fails, fail serialization.
 	if !isASCII(inputKey) {
-		return nil, errors.Join(ErrInvalidKey, ErrNonAsciiInput)
+		return nil, prefixError(ErrInvalidKey, ErrNonAsciiInput)
 	}
 
 	// 2. If input_key contains characters not in lcalpha, DIGIT, "_", "-", ".", or "*", fail serialization.
@@ -410,7 +428,7 @@ func parseBareItem(inputString string) (v BareItem, rest string, err error) {
 	}
 
 	if err != nil {
-		err = errors.Join(ErrInvalidBareItem, err)
+		err = prefixError(ErrInvalidBareItem, err)
 	}
 
 	return
@@ -819,7 +837,7 @@ func serializeBareItemString(dst []byte, inputString string) ([]byte, error) {
 	//
 	// 1. Convert input_string into a sequence of ASCII characters; if conversion fails, fail serialization.
 	if !isASCII(inputString) {
-		return nil, errors.Join(ErrInvalidString, ErrNonAsciiInput)
+		return nil, prefixError(ErrInvalidString, ErrNonAsciiInput)
 	}
 
 	var toEscape int
@@ -905,7 +923,7 @@ func serializeBareItemToken(dst []byte, inputToken string) ([]byte, error) {
 	//
 	// 1. Convert input_token into a sequence of ASCII characters; if conversion fails, fail serialization.
 	if !isASCII(inputToken) {
-		return nil, errors.Join(ErrInvalidToken, ErrNonAsciiInput)
+		return nil, prefixError(ErrInvalidToken, ErrNonAsciiInput)
 	}
 
 	// 2. If the first character of input_token is not ALPHA or "*", or the remaining portion contains a character not
@@ -970,7 +988,7 @@ func parseBareItemByteSequence(inputString string) (v BareItem, rest string, err
 		binaryContent, err = base64.RawStdEncoding.DecodeString(b64Content)
 	}
 	if err != nil {
-		return BareItem{}, "", errors.Join(ErrInvalidByteSequence, err)
+		return BareItem{}, "", prefixError(ErrInvalidByteSequence, err)
 	}
 
 	// 8. Return binary_content.
@@ -1401,7 +1419,7 @@ func serializeDictionary(dst []byte, inputDictionary Dictionary) ([]byte, error)
 		// 1. Append the result of running Serializing a Key (Section 4.1.1.3) with member's member_key to output.
 		output, err = serializeKey(output, memberKey)
 		if err != nil {
-			return nil, errors.Join(ErrInvalidDictionary, err)
+			return nil, prefixError(ErrInvalidDictionary, err)
 		}
 
 		switch {
@@ -1427,7 +1445,7 @@ func serializeDictionary(dst []byte, inputDictionary Dictionary) ([]byte, error)
 		}
 
 		if err != nil {
-			return nil, errors.Join(ErrInvalidDictionary, err)
+			return nil, prefixError(ErrInvalidDictionary, err)
 		}
 
 		// 4. If more members remain in input_dictionary:
@@ -1487,7 +1505,7 @@ func parseInnerList(inputString string) (v InnerList, rest string, err error) {
 			// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
 			innerList.Parameters, inputString, err = parseParameters(inputString)
 			if err != nil {
-				return InnerList{}, "", errors.Join(ErrInvalidInnerList, err)
+				return InnerList{}, "", prefixError(ErrInvalidInnerList, err)
 			}
 
 			// 3. Return the tuple (inner_list, parameters).
@@ -1532,7 +1550,7 @@ func serializeInnerList(dst []byte, il InnerList) ([]byte, error) {
 		// 1. Append the result of running Serializing an Item (Section 4.1.3) with (member_value, parameters) to output.
 		output, err = serializeItem(output, member)
 		if err != nil {
-			return nil, errors.Join(ErrInvalidInnerList, err)
+			return nil, prefixError(ErrInvalidInnerList, err)
 		}
 
 		// 2. If more values remain in inner_list, append a single SP to output.
@@ -1547,7 +1565,7 @@ func serializeInnerList(dst []byte, il InnerList) ([]byte, error) {
 	// 4. Append the result of running Serializing Parameters (Section 4.1.1.2) with list_parameters to output.
 	output, err = serializeParameters(output, il.Parameters)
 	if err != nil {
-		return nil, errors.Join(ErrInvalidInnerList, err)
+		return nil, prefixError(ErrInvalidInnerList, err)
 	}
 
 	// 5. Return output.
@@ -1577,13 +1595,13 @@ func parseItem(inputString string) (v Item, rest string, err error) {
 	// 1. Let bare_item be the result of running Parsing a Bare Item (Section 4.2.3.1) with input_string.
 	item, inputString, err := parseBareItem(inputString)
 	if err != nil {
-		return Item{}, "", errors.Join(ErrInvalidItem, err)
+		return Item{}, "", prefixError(ErrInvalidItem, err)
 	}
 
 	// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
 	params, inputString, err := parseParameters(inputString)
 	if err != nil {
-		return Item{}, "", errors.Join(ErrInvalidItem, err)
+		return Item{}, "", prefixError(ErrInvalidItem, err)
 	}
 
 	// 3. Return the tuple (bare_item, parameters).
@@ -1602,13 +1620,13 @@ func serializeItem(dst []byte, i Item) ([]byte, error) {
 	// 2. Append the result of running Serializing a Bare Item (Section 4.1.3.1) with bare_item to output.
 	output, err = serializeBareItem(output, i.BareItem)
 	if err != nil {
-		return nil, errors.Join(ErrInvalidItem, err)
+		return nil, prefixError(ErrInvalidItem, err)
 	}
 
 	// 3. Append the result of running Serializing Parameters (Section 4.1.1.2) with item_parameters to output.
 	output, err = serializeParameters(output, i.Parameters)
 	if err != nil {
-		return nil, errors.Join(ErrInvalidItem, err)
+		return nil, prefixError(ErrInvalidItem, err)
 	}
 
 	// 4. Return output.
@@ -1734,7 +1752,7 @@ func parseList(inputString string) (v List, rest string, err error) {
 		var member ItemOrInnerList
 		member, inputString, err = parseItemOrInnerList(inputString)
 		if err != nil {
-			return List{}, "", errors.Join(ErrInvalidList, err)
+			return List{}, "", prefixError(ErrInvalidList, err)
 		}
 		// Removes some allocations for lists with more than 2 items
 		if members == nil {
@@ -1790,7 +1808,7 @@ func serializeList(dst []byte, inputList List) ([]byte, error) {
 		}
 
 		if err != nil {
-			return nil, errors.Join(ErrInvalidList, err)
+			return nil, prefixError(ErrInvalidList, err)
 		}
 
 		// 3. If more member_values remain in input_list:
@@ -1841,7 +1859,7 @@ func parseParameters(inputString string) (v Parameters, rest string, err error) 
 		var paramKey string
 		paramKey, inputString, err = parseKey(inputString)
 		if err != nil {
-			return Parameters{}, inputString, errors.Join(ErrInvalidParameters, err)
+			return Parameters{}, inputString, prefixError(ErrInvalidParameters, err)
 		}
 
 		// 5. Let param_value be Boolean true.
@@ -1855,7 +1873,7 @@ func parseParameters(inputString string) (v Parameters, rest string, err error) 
 			// 2. Let param_value be the result of running Parsing a Bare Item (Section 4.2.3.1) with input_string.
 			paramValue, inputString, err = parseBareItem(inputString)
 			if err != nil {
-				return Parameters{}, inputString, errors.Join(ErrInvalidParameters, err)
+				return Parameters{}, inputString, prefixError(ErrInvalidParameters, err)
 			}
 		}
 
@@ -1884,7 +1902,7 @@ func serializeParameters(dst []byte, p Parameters) ([]byte, error) {
 		var err error
 		output, err = serializeKey(output, paramKey)
 		if err != nil {
-			return nil, errors.Join(ErrInvalidParameters, err)
+			return nil, prefixError(ErrInvalidParameters, err)
 		}
 
 		// 4. If param_value is not Boolean true:
@@ -1895,7 +1913,7 @@ func serializeParameters(dst []byte, p Parameters) ([]byte, error) {
 			// 2. Append the result of running Serializing a bare Item (Section 4.1.3.1) with param_value to output.
 			output, err = serializeBareItem(output, paramValue)
 			if err != nil {
-				return nil, errors.Join(ErrInvalidParameters, err)
+				return nil, prefixError(ErrInvalidParameters, err)
 			}
 		}
 	}
