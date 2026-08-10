@@ -394,35 +394,57 @@ const (
 	BareItemTypeToken
 )
 
-func bareItemInteger(i int64) BareItem {
+// BareItemInteger returns a BareItem holding the given integer value.
+func BareItemInteger(i int64) BareItem {
 	return BareItem{Type: BareItemTypeInteger, Integer: i}
 }
 
-func bareItemDecimal(d float64) BareItem {
+// BareItemDecimal returns a BareItem holding the given decimal value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemDecimal(d float64) BareItem {
 	return BareItem{Type: BareItemTypeDecimal, Decimal: d}
 }
 
-func bareItemString(s string) BareItem {
+// BareItemString returns a BareItem holding the given string value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemString(s string) BareItem {
 	return BareItem{Type: BareItemTypeString, String: s}
 }
 
-func bareItemToken(t string) BareItem {
+// BareItemToken returns a BareItem holding the given token value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemToken(t string) BareItem {
 	return BareItem{Type: BareItemTypeToken, Token: t}
 }
 
-func bareItemByteSequence(bs []byte) BareItem {
+// BareItemByteSequence returns a BareItem holding the given byte sequence value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemByteSequence(bs []byte) BareItem {
 	return BareItem{Type: BareItemTypeByteSequence, ByteSequence: bs}
 }
 
-func bareItemBoolean(b bool) BareItem {
+// BareItemBoolean returns a BareItem holding the given boolean value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemBoolean(b bool) BareItem {
 	return BareItem{Type: BareItemTypeBoolean, Boolean: b}
 }
 
-func bareItemDate(d int64) BareItem {
+// BareItemDate returns a BareItem holding the given date value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemDate(d int64) BareItem {
 	return BareItem{Type: BareItemTypeDate, Date: d}
 }
 
-func bareItemDisplayString(d string) BareItem {
+// BareItemDisplayString returns a BareItem holding the given display string value.
+//
+// No validation is performed on the value and serializing the value may fail if it is not valid.
+func BareItemDisplayString(d string) BareItem {
 	return BareItem{Type: BareItemTypeDisplayString, DisplayString: d}
 }
 
