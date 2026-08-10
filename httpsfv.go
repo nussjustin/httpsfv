@@ -1270,18 +1270,15 @@ func parseDictionary(inputString string) (v Dictionary, rest string, err error) 
 
 			{
 				// 1. Let value be Boolean true.
-				value := ItemOrInnerList{
-					Type: ItemOrInnerListTypeItem,
-					Item: Item{
-						BareItem: BareItem{
-							Type:    BareItemTypeBoolean,
-							Boolean: true,
-						},
+				value := ItemOrInnerListFrom(Item{
+					BareItem: BareItem{
+						Type:    BareItemTypeBoolean,
+						Boolean: true,
 					},
-				}
+				})
 
 				// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
-				value.Item.Parameters, inputString, err = parseParameters(inputString)
+				value.item.Parameters, inputString, err = parseParameters(inputString)
 				if err != nil {
 					return Dictionary{}, "", err
 				}
@@ -1343,23 +1340,23 @@ func serializeDictionary(dst []byte, inputDictionary Dictionary) ([]byte, error)
 
 		switch {
 		// 2. If member_value is Boolean true:
-		case memberValue.Type == ItemOrInnerListTypeItem &&
-			memberValue.Item.Type == BareItemTypeBoolean &&
-			memberValue.Item.Boolean:
+		case memberValue.typ == ItemOrInnerListTypeItem &&
+			memberValue.item.Type == BareItemTypeBoolean &&
+			memberValue.item.Boolean:
 			// 1. Append the result of running Serializing Parameters (Section 4.1.1.2) with parameters to output.
-			output, err = serializeParameters(output, memberValue.Item.Parameters)
+			output, err = serializeParameters(output, memberValue.item.Parameters)
 		// 3. Otherwise:
 		default:
 			// 1. Append "=" to output.
 			output = append(output, '=')
 
-			switch memberValue.Type {
+			switch memberValue.typ {
 			// 2. If member_value is an array, append the result of running Serializing an Inner List (Section 4.1.1.1) with (member_value, parameters) to output.
 			case ItemOrInnerListTypeInnerList:
-				output, err = serializeInnerList(output, memberValue.InnerList)
+				output, err = serializeInnerList(output, memberValue.innerList)
 			// 3. Otherwise, append the result of running Serializing an Item (Section 4.1.3) with (member_value, parameters) to output.
 			case ItemOrInnerListTypeItem:
-				output, err = serializeItem(output, memberValue.Item)
+				output, err = serializeItem(output, memberValue.item)
 			}
 		}
 
@@ -1561,16 +1558,12 @@ func (i *Item) AppendText(text []byte) ([]byte, error) {
 
 // ItemOrInnerList contains either an [Item] or [InnerList] as part of a [Dictionary] or [List].
 //
-// It acts as a tagged union, with [ListMember.Type] specifying the type and thus which other field of the struct is set.
+// It acts as a tagged union, with [ItemOrInnerList.Type] specifying the type and [ItemOrInnerList.InnerList] or
+// [ItemOrInnerList.Item] returning the value.
 type ItemOrInnerList struct {
-	// Type is used as tag to denote the field in which the value is stored.
-	Type ItemOrInnerListType
-
-	// InnerList contains the value if Type is [ItemOrInnerListTypeInnerList].
-	InnerList InnerList
-
-	// Item contains the value if Type is [ItemOrInnerListTypeItem].
-	Item Item
+	typ       ItemOrInnerListType
+	innerList InnerList
+	item      Item
 }
 
 // ItemOrInnerListType is an enum of types that a ItemOrInnerList can contain.
@@ -1588,9 +1581,9 @@ const (
 func ItemOrInnerListFrom[T InnerList | Item](t T) ItemOrInnerList {
 	switch v := any(t).(type) {
 	case InnerList:
-		return ItemOrInnerList{Type: ItemOrInnerListTypeInnerList, InnerList: v}
+		return ItemOrInnerList{typ: ItemOrInnerListTypeInnerList, innerList: v}
 	case Item:
-		return ItemOrInnerList{Type: ItemOrInnerListTypeItem, Item: v}
+		return ItemOrInnerList{typ: ItemOrInnerListTypeItem, item: v}
 	default:
 		panic("unreachable")
 	}
@@ -1606,7 +1599,7 @@ func parseItemOrInnerList(inputString string) (v ItemOrInnerList, rest string, e
 		if err != nil {
 			return ItemOrInnerList{}, "", err
 		}
-		return ItemOrInnerList{Type: ItemOrInnerListTypeInnerList, InnerList: innerList}, inputString, nil
+		return ItemOrInnerList{typ: ItemOrInnerListTypeInnerList, innerList: innerList}, inputString, nil
 	}
 
 	// 2. Return the result of running Parsing an Item (Section 4.2.3) with input_string.
@@ -1614,7 +1607,34 @@ func parseItemOrInnerList(inputString string) (v ItemOrInnerList, rest string, e
 	if err != nil {
 		return ItemOrInnerList{}, "", err
 	}
-	return ItemOrInnerList{Type: ItemOrInnerListTypeItem, Item: item}, inputString, nil
+	return ItemOrInnerList{typ: ItemOrInnerListTypeItem, item: item}, inputString, nil
+}
+
+// InnerList returns the underlying InnerList.
+//
+// It panics if t is not an InnerList.
+func (t ItemOrInnerList) InnerList() InnerList {
+	if t.typ != ItemOrInnerListTypeInnerList {
+		panic("ItemOrInnerList is not an InnerList")
+	}
+
+	return t.innerList
+}
+
+// Item returns the underlying Item.
+//
+// It panics if t is not an Item.
+func (t ItemOrInnerList) Item() Item {
+	if t.typ != ItemOrInnerListTypeItem {
+		panic("ItemOrInnerList is not an Item")
+	}
+
+	return t.item
+}
+
+// Type returns the type of the underlying value.
+func (t ItemOrInnerList) Type() ItemOrInnerListType {
+	return t.typ
 }
 
 // String returns the type name, which is the name of the constant minus the type prefix.
@@ -1694,13 +1714,13 @@ func serializeList(dst []byte, inputList List) ([]byte, error) {
 
 	// 2. For each (member_value, parameters) of input_list:
 	for i, member := range inputList.Members {
-		switch member.Type {
+		switch member.typ {
 		case ItemOrInnerListTypeInnerList:
 			// 1. If member_value is an array, append the result of running Serializing an Inner List (Section 4.1.1.1) with (member_value, parameters) to output.
-			output, err = serializeInnerList(output, member.InnerList)
+			output, err = serializeInnerList(output, member.innerList)
 		case ItemOrInnerListTypeItem:
 			// 2. Otherwise, append the result of running Serializing an Item (Section 4.1.3) with (member_value, parameters) to output.
-			output, err = serializeItem(output, member.Item)
+			output, err = serializeItem(output, member.item)
 		}
 
 		if err != nil {

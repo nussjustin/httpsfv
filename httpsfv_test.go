@@ -44,6 +44,20 @@ var cmpOpts = []cmp.Option{
 		}
 		return pairs
 	}),
+	cmp.Transformer("ItemOrInnerList", func(v ItemOrInnerList) any {
+		var data struct {
+			Type  ItemOrInnerListType
+			Value any
+		}
+		data.Type = v.Type()
+		switch data.Type {
+		case ItemOrInnerListTypeInnerList:
+			data.Value = v.InnerList()
+		case ItemOrInnerListTypeItem:
+			data.Value = v.Item()
+		}
+		return data
+	}),
 	cmp.Transformer("Parameters", func(v Parameters) any {
 		type pair struct {
 			Key   any
@@ -69,9 +83,9 @@ func dict(args ...any) Dictionary {
 		var value ItemOrInnerList
 		switch v := args[i+1].(type) {
 		case InnerList:
-			value = ItemOrInnerList{Type: ItemOrInnerListTypeInnerList, InnerList: v}
+			value = ItemOrInnerListFrom(v)
 		case Item:
-			value = ItemOrInnerList{Type: ItemOrInnerListTypeItem, Item: v}
+			value = ItemOrInnerListFrom(v)
 		default:
 			panic(fmt.Sprintf("unexpected value of type %T", v))
 		}
@@ -2546,7 +2560,7 @@ func Test_parseItemOrInnerList(t *testing.T) {
 		var want ItemOrInnerList
 
 		if testCase.wantError == nil {
-			want = ItemOrInnerList{Type: ItemOrInnerListTypeItem, Item: testCase.want}
+			want = ItemOrInnerListFrom(testCase.want)
 		}
 
 		parseItemOrInnerListTestCases = append(parseItemOrInnerListTestCases, parseItemOrInnerListTestCase{
@@ -2566,7 +2580,7 @@ func Test_parseItemOrInnerList(t *testing.T) {
 		var want ItemOrInnerList
 
 		if testCase.wantError == nil {
-			want = ItemOrInnerList{Type: ItemOrInnerListTypeInnerList, InnerList: testCase.want}
+			want = ItemOrInnerListFrom(testCase.want)
 		}
 
 		parseItemOrInnerListTestCases = append(parseItemOrInnerListTestCases, parseItemOrInnerListTestCase{
