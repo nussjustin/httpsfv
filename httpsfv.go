@@ -334,32 +334,11 @@ func serializeKey(dst []byte, inputKey string) ([]byte, error) {
 //
 // It acts as a tagged union, with [BareItem.Type] returning the type of the item.
 type BareItem struct {
-	// Type is used as tag to denote the field in which the value is stored.
-	Type BareItemType
+	typ BareItemType
 
-	// Boolean contains the value if Type is BareItemTypeBoolean.
-	Boolean bool
-
-	// ByteSequence contains the value if Type is BareItemTypeByteSequence.
-	ByteSequence []byte
-
-	// Date contains the value if Type is BareItemTypeDate.
-	Date int64
-
-	// Decimal contains the value if Type is BareItemTypeDecimal.
-	Decimal float64
-
-	// DisplayString contains the value if Type is BareItemTypeDisplayString.
-	DisplayString string
-
-	// Integer contains the value if Type is BareItemTypeInteger.
-	Integer int64
-
-	// String contains the value if Type is BareItemTypeString.
-	String string
-
-	// Token contains the value if Type is BareItemTypeToken.
-	Token string
+	bytes []byte
+	num   uint64
+	str   string
 }
 
 // BareItemType is an enum of types for a BareItem.
@@ -393,60 +372,6 @@ const (
 	// BareItemTypeToken denotes a token as specified in RFC 9651 section 3.3.4.
 	BareItemTypeToken
 )
-
-// BareItemInteger returns a BareItem holding the given integer value.
-func BareItemInteger(i int64) BareItem {
-	return BareItem{Type: BareItemTypeInteger, Integer: i}
-}
-
-// BareItemDecimal returns a BareItem holding the given decimal value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemDecimal(d float64) BareItem {
-	return BareItem{Type: BareItemTypeDecimal, Decimal: d}
-}
-
-// BareItemString returns a BareItem holding the given string value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemString(s string) BareItem {
-	return BareItem{Type: BareItemTypeString, String: s}
-}
-
-// BareItemToken returns a BareItem holding the given token value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemToken(t string) BareItem {
-	return BareItem{Type: BareItemTypeToken, Token: t}
-}
-
-// BareItemByteSequence returns a BareItem holding the given byte sequence value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemByteSequence(bs []byte) BareItem {
-	return BareItem{Type: BareItemTypeByteSequence, ByteSequence: bs}
-}
-
-// BareItemBoolean returns a BareItem holding the given boolean value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemBoolean(b bool) BareItem {
-	return BareItem{Type: BareItemTypeBoolean, Boolean: b}
-}
-
-// BareItemDate returns a BareItem holding the given date value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemDate(d int64) BareItem {
-	return BareItem{Type: BareItemTypeDate, Date: d}
-}
-
-// BareItemDisplayString returns a BareItem holding the given display string value.
-//
-// No validation is performed on the value and serializing the value may fail if it is not valid.
-func BareItemDisplayString(d string) BareItem {
-	return BareItem{Type: BareItemTypeDisplayString, DisplayString: d}
-}
 
 // parseBareItem parses a single bare item as specified in RFC 9651 section 4.3.2.1 "Parsing an Item".
 func parseBareItem(inputString string) (v BareItem, rest string, err error) {
@@ -492,26 +417,165 @@ func parseBareItem(inputString string) (v BareItem, rest string, err error) {
 }
 
 func serializeBareItem(dst []byte, b BareItem) ([]byte, error) {
-	switch b.Type {
+	switch b.Type() {
 	case BareItemTypeInteger:
-		return serializeBareItemInteger(dst, b.Integer)
+		return serializeBareItemInteger(dst, b.Integer())
 	case BareItemTypeDecimal:
-		return serializeBareItemDecimal(dst, b.Decimal)
+		return serializeBareItemDecimal(dst, b.Decimal())
 	case BareItemTypeString:
-		return serializeBareItemString(dst, b.String)
+		return serializeBareItemString(dst, b.String())
 	case BareItemTypeToken:
-		return serializeBareItemToken(dst, b.Token)
+		return serializeBareItemToken(dst, b.Token())
 	case BareItemTypeByteSequence:
-		return serializeBareItemByteSequence(dst, b.ByteSequence)
+		return serializeBareItemByteSequence(dst, b.ByteSequence())
 	case BareItemTypeBoolean:
-		return serializeBareItemBoolean(dst, b.Boolean)
+		return serializeBareItemBoolean(dst, b.Boolean())
 	case BareItemTypeDate:
-		return serializeBareItemDate(dst, b.Date)
+		return serializeBareItemDate(dst, b.Date())
 	case BareItemTypeDisplayString:
-		return serializeBareItemDisplayString(dst, b.DisplayString)
+		return serializeBareItemDisplayString(dst, b.DisplayString())
 	default:
-		panic(fmt.Sprintf("unknown BareItem type: %d", b.Type))
+		panic(fmt.Sprintf("unknown BareItem type: %d", b.typ))
 	}
+}
+
+// BareItemInteger returns a BareItem holding the given integer value.
+func BareItemInteger(i int64) BareItem {
+	return BareItem{typ: BareItemTypeInteger, num: uint64(i)}
+}
+
+// Integer returns the underlying integer value.
+//
+// It panics if b is not of type [BareItemTypeInteger].
+func (b *BareItem) Integer() int64 {
+	if b.typ != BareItemTypeInteger {
+		panic("BareItem is not an integer")
+	}
+	return int64(b.num)
+}
+
+// BareItemDecimal returns a BareItem holding the given decimal value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+func BareItemDecimal(d float64) BareItem {
+	return BareItem{typ: BareItemTypeDecimal, num: math.Float64bits(d)}
+}
+
+// Decimal returns the underlying decimal value.
+//
+// It panics if b is not of type [BareItemTypeDecimal].
+func (b *BareItem) Decimal() float64 {
+	if b.typ != BareItemTypeDecimal {
+		panic("BareItem is not a decimal")
+	}
+	return math.Float64frombits(b.num)
+}
+
+// BareItemString returns a BareItem holding the given string value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+func BareItemString(s string) BareItem {
+	return BareItem{typ: BareItemTypeString, str: s}
+}
+
+// String returns the underlying string value.
+//
+// It panics if b is not of type [BareItemTypeString].
+func (b *BareItem) String() string {
+	if b.typ != BareItemTypeString {
+		panic("BareItem is not a string")
+	}
+	return b.str
+}
+
+// BareItemToken returns a BareItem holding the given token value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+func BareItemToken(t string) BareItem {
+	return BareItem{typ: BareItemTypeToken, str: t}
+}
+
+// Token returns the underlying token value.
+//
+// It panics if b is not of type [BareItemTypeToken].
+func (b *BareItem) Token() string {
+	if b.typ != BareItemTypeToken {
+		panic("BareItem is not a token")
+	}
+	return b.str
+}
+
+// BareItemByteSequence returns a BareItem holding the given byte sequence value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+//
+// Note that bs is not copied. Modifications to the underlying value will affect the returned bare item.
+func BareItemByteSequence(bs []byte) BareItem {
+	return BareItem{typ: BareItemTypeByteSequence, bytes: bs}
+}
+
+// ByteSequence returns the underlying byte sequence value.
+//
+// It panics if b is not of type [BareItemTypeByteSequence].
+func (b *BareItem) ByteSequence() []byte {
+	if b.typ != BareItemTypeByteSequence {
+		panic("BareItem is not a byte sequence")
+	}
+	return b.bytes
+}
+
+// BareItemBoolean returns a BareItem holding the given boolean value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+func BareItemBoolean(b bool) BareItem {
+	if b {
+		return BareItem{typ: BareItemTypeBoolean, num: 1}
+	}
+	return BareItem{typ: BareItemTypeBoolean, num: 0}
+}
+
+// Boolean returns the underlying boolean value.
+//
+// It panics if b is not of type [BareItemTypeBoolean].
+func (b *BareItem) Boolean() bool {
+	if b.typ != BareItemTypeBoolean {
+		panic("BareItem is not a boolean")
+	}
+	return b.num == 1
+}
+
+// BareItemDate returns a BareItem holding the given date value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+func BareItemDate(d int64) BareItem {
+	return BareItem{typ: BareItemTypeDate, num: uint64(d)}
+}
+
+// Date returns the underlying date value.
+//
+// It panics if b is not of type [BareItemTypeDate].
+func (b *BareItem) Date() int64 {
+	if b.typ != BareItemTypeDate {
+		panic("BareItem is not a date")
+	}
+	return int64(b.num)
+}
+
+// BareItemDisplayString returns a BareItem holding the given display string value.
+//
+// No validation is performed on the value, and serializing the value may fail if it is not valid.
+func BareItemDisplayString(d string) BareItem {
+	return BareItem{typ: BareItemTypeDisplayString, str: d}
+}
+
+// DisplayString returns the underlying display string value.
+//
+// It panics if b is not of type [BareItemTypeDate].
+func (b *BareItem) DisplayString() string {
+	if b.typ != BareItemTypeDisplayString {
+		panic("BareItem is not a display string")
+	}
+	return b.str
 }
 
 // parseBareItemIntegerOrDecimal parses an integer or decimal as specified in RFC 9651 section 4.3.4 "Parsing an Integer or Decimal".
@@ -614,10 +678,10 @@ func parseBareItemIntegerOrDecimal(inputString string) (v BareItem, rest string,
 
 	// 11. Return output_number.
 	if type_ == BareItemTypeInteger {
-		return BareItem{Type: type_, Integer: outputNumberInt}, inputString, nil
+		return BareItemInteger(outputNumberInt), inputString, nil
 	}
 
-	return BareItem{Type: type_, Decimal: outputNumberFloat}, inputString, nil
+	return BareItemDecimal(outputNumberFloat), inputString, nil
 }
 
 // serializeBareItemInteger serializes an integer as specified in RFC 9651 section 4.1.4 "Serializing an Integer".
@@ -731,9 +795,9 @@ func parseBareItemString(inputString string) (v BareItem, rest string, err error
 		// 3. Else, if char is DQUOTE, return output_string.
 		if char == _DQUOTE {
 			if outputStringEnd == 1 {
-				return BareItem{Type: BareItemTypeString, String: inputString[1 : curr-1]}, inputString[curr:], nil
+				return BareItemString(inputString[1 : curr-1]), inputString[curr:], nil
 			}
-			return BareItem{Type: BareItemTypeString, String: outputString.String()}, inputString[curr:], nil
+			return BareItemString(outputString.String()), inputString[curr:], nil
 		}
 
 		// 4. Else, if char is in the range %x00-1f or %x7f-ff (i.e., it is not in VCHAR or SP), fail parsing.
@@ -820,7 +884,7 @@ func parseBareItemToken(inputString string) (v BareItem, rest string, err error)
 	for curr < len(inputString) {
 		// 1. If the first character of input_string is not in tchar, ":", or "/", return output_string.
 		if !isRFC9110tchar(inputString[curr]) && inputString[curr] != ':' && inputString[curr] != '/' {
-			return BareItem{Type: BareItemTypeToken, Token: inputString[:curr]}, inputString[curr:], nil
+			return BareItemToken(inputString[:curr]), inputString[curr:], nil
 		}
 
 		// 2. Let char be the result of consuming the first character of input_string.
@@ -832,7 +896,7 @@ func parseBareItemToken(inputString string) (v BareItem, rest string, err error)
 	}
 
 	// 4. Return output_string
-	return BareItem{Type: BareItemTypeToken, Token: inputString[:curr]}, inputString[curr:], nil
+	return BareItemToken(inputString[:curr]), inputString[curr:], nil
 }
 
 // serializeBareItemToken serializes a token as specified in RFC 9651 section 4.1.7 "Serializing a Token".
@@ -910,7 +974,7 @@ func parseBareItemByteSequence(inputString string) (v BareItem, rest string, err
 	}
 
 	// 8. Return binary_content.
-	return BareItem{Type: BareItemTypeByteSequence, ByteSequence: binaryContent}, inputString, nil
+	return BareItemByteSequence(binaryContent), inputString, nil
 }
 
 // serializeBareItemByteSequence serializes a byte sequence as specified in RFC 9651 section 4.1.8 "Serializing a Byte Sequence".
@@ -953,13 +1017,13 @@ func parseBareItemBoolean(inputString string) (v BareItem, rest string, err erro
 	// 3. If the first character of input_string matches "1", discard the first character, and return true.
 	if inputString != "" && inputString[0] == '1' {
 		inputString = inputString[1:]
-		return BareItem{Type: BareItemTypeBoolean, Boolean: true}, inputString, nil
+		return BareItemBoolean(true), inputString, nil
 	}
 
 	// 4. If the first character of input_string matches "0", discard the first character, and return false.
 	if inputString != "" && inputString[0] == '0' {
 		inputString = inputString[1:]
-		return BareItem{Type: BareItemTypeBoolean, Boolean: false}, inputString, nil
+		return BareItemBoolean(false), inputString, nil
 	}
 
 	// 5. No value has matched; fail parsing.
@@ -1009,12 +1073,12 @@ func parseBareItemDate(inputString string) (v BareItem, rest string, err error) 
 	}
 
 	// 4. If output_date is a Decimal, fail parsing.
-	if v.Type == BareItemTypeDecimal {
+	if v.Type() == BareItemTypeDecimal {
 		return BareItem{}, "", ErrInvalidDate
 	}
 
 	// 5. Return output_date.
-	return BareItem{Type: BareItemTypeDate, Date: v.Integer}, inputString, nil
+	return BareItemDate(v.Integer()), inputString, nil
 }
 
 // serializeBareItemDate serializes a date as specified in RFC 9651 section 4.1.10 "Serializing a Date".
@@ -1105,7 +1169,7 @@ func parseBareItemDisplayString(inputString string) (v BareItem, rest string, er
 			}
 
 			// 2. Return unicode_sequence:
-			return BareItem{Type: BareItemTypeDisplayString, DisplayString: unicodeSequence}, inputString[curr:], nil
+			return BareItemDisplayString(unicodeSequence), inputString[curr:], nil
 		}
 
 		// 5. Otherwise, if char is not %" or DQUOTE:
@@ -1208,6 +1272,11 @@ func (b *BareItem) AppendText(text []byte) ([]byte, error) {
 	return serializeBareItem(text, *b)
 }
 
+// Type returns the type of the bare item.
+func (b *BareItem) Type() BareItemType {
+	return b.typ
+}
+
 // String returns the type name, which is the name of the constant minus the type prefix.
 func (t BareItemType) String() string {
 	switch t {
@@ -1271,10 +1340,7 @@ func parseDictionary(inputString string) (v Dictionary, rest string, err error) 
 			{
 				// 1. Let value be Boolean true.
 				value := ItemOrInnerListFrom(Item{
-					BareItem: BareItem{
-						Type:    BareItemTypeBoolean,
-						Boolean: true,
-					},
+					BareItem: BareItemBoolean(true),
 				})
 
 				// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
@@ -1340,9 +1406,9 @@ func serializeDictionary(dst []byte, inputDictionary Dictionary) ([]byte, error)
 
 		switch {
 		// 2. If member_value is Boolean true:
-		case memberValue.typ == ItemOrInnerListTypeItem &&
-			memberValue.item.Type == BareItemTypeBoolean &&
-			memberValue.item.Boolean:
+		case memberValue.Type() == ItemOrInnerListTypeItem &&
+			memberValue.item.Type() == BareItemTypeBoolean &&
+			memberValue.item.Boolean():
 			// 1. Append the result of running Serializing Parameters (Section 4.1.1.2) with parameters to output.
 			output, err = serializeParameters(output, memberValue.item.Parameters)
 		// 3. Otherwise:
@@ -1350,7 +1416,7 @@ func serializeDictionary(dst []byte, inputDictionary Dictionary) ([]byte, error)
 			// 1. Append "=" to output.
 			output = append(output, '=')
 
-			switch memberValue.typ {
+			switch memberValue.Type() {
 			// 2. If member_value is an array, append the result of running Serializing an Inner List (Section 4.1.1.1) with (member_value, parameters) to output.
 			case ItemOrInnerListTypeInnerList:
 				output, err = serializeInnerList(output, memberValue.innerList)
@@ -1570,10 +1636,10 @@ type ItemOrInnerList struct {
 type ItemOrInnerListType uint8
 
 const (
-	// ItemOrInnerListTypeInnerList denotes a ItemOrInnerList containing an InnerList.
+	// ItemOrInnerListTypeInnerList denotes an ItemOrInnerList containing an InnerList.
 	ItemOrInnerListTypeInnerList ItemOrInnerListType = iota
 
-	// ItemOrInnerListTypeItem denotes a ItemOrInnerList containing an Item.
+	// ItemOrInnerListTypeItem denotes an ItemOrInnerList containing an Item.
 	ItemOrInnerListTypeItem
 )
 
@@ -1612,7 +1678,7 @@ func parseItemOrInnerList(inputString string) (v ItemOrInnerList, rest string, e
 
 // InnerList returns the underlying InnerList.
 //
-// It panics if t is not an InnerList.
+// It panics if t is not of type [ItemOrInnerListTypeInnerList].
 func (t ItemOrInnerList) InnerList() InnerList {
 	if t.typ != ItemOrInnerListTypeInnerList {
 		panic("ItemOrInnerList is not an InnerList")
@@ -1623,7 +1689,7 @@ func (t ItemOrInnerList) InnerList() InnerList {
 
 // Item returns the underlying Item.
 //
-// It panics if t is not an Item.
+// It panics if t is not of type [ItemOrInnerListTypeItem].
 func (t ItemOrInnerList) Item() Item {
 	if t.typ != ItemOrInnerListTypeItem {
 		panic("ItemOrInnerList is not an Item")
@@ -1714,7 +1780,7 @@ func serializeList(dst []byte, inputList List) ([]byte, error) {
 
 	// 2. For each (member_value, parameters) of input_list:
 	for i, member := range inputList.Members {
-		switch member.typ {
+		switch member.Type() {
 		case ItemOrInnerListTypeInnerList:
 			// 1. If member_value is an array, append the result of running Serializing an Inner List (Section 4.1.1.1) with (member_value, parameters) to output.
 			output, err = serializeInnerList(output, member.innerList)
@@ -1779,7 +1845,7 @@ func parseParameters(inputString string) (v Parameters, rest string, err error) 
 		}
 
 		// 5. Let param_value be Boolean true.
-		paramValue := BareItem{Type: BareItemTypeBoolean, Boolean: true}
+		paramValue := BareItemBoolean(true)
 
 		// 6. If the first character of input_string is "=":
 		if inputString != "" && inputString[0] == '=' {
@@ -1822,7 +1888,7 @@ func serializeParameters(dst []byte, p Parameters) ([]byte, error) {
 		}
 
 		// 4. If param_value is not Boolean true:
-		if paramValue.Type != BareItemTypeBoolean || !paramValue.Boolean {
+		if paramValue.Type() != BareItemTypeBoolean || !paramValue.Boolean() {
 			// 1. Append "=" to output.
 			output = append(output, '=')
 

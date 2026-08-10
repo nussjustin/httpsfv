@@ -12,26 +12,26 @@ import (
 var cmpOpts = []cmp.Option{
 	cmp.Transformer("BareItem", func(v BareItem) string {
 		var val any
-		switch v.Type {
+		switch v.Type() {
 		case BareItemTypeInvalid:
 		case BareItemTypeBoolean:
-			val = v.Boolean
+			val = v.Boolean()
 		case BareItemTypeByteSequence:
-			val = string(v.ByteSequence)
+			val = string(v.ByteSequence())
 		case BareItemTypeDate:
-			val = v.Date
+			val = v.Date()
 		case BareItemTypeDecimal:
-			val = v.Decimal
+			val = v.Decimal()
 		case BareItemTypeDisplayString:
-			val = v.DisplayString
+			val = v.DisplayString()
 		case BareItemTypeInteger:
-			val = v.Integer
+			val = v.Integer()
 		case BareItemTypeString:
-			val = v.String
+			val = v.String()
 		case BareItemTypeToken:
-			val = v.Token
+			val = v.Token()
 		}
-		return fmt.Sprintf("%s(%v)", v.Type, val)
+		return fmt.Sprintf("%s(%v)", v.Type(), val)
 	}),
 	cmp.Transformer("Dictionary", func(v Dictionary) any {
 		type pair struct {
@@ -900,7 +900,7 @@ var serializeBareItemIntegerTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemInteger(t *testing.T) {
 	for _, testCase := range serializeBareItemIntegerTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemInteger([]byte("prefix: "), testCase.input.Integer)
+			got, err := serializeBareItemInteger([]byte("prefix: "), testCase.input.Integer())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemInteger() error %v, want %v", err, testCase.wantError)
@@ -1005,7 +1005,7 @@ var serializeBareItemDecimalTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemDecimal(t *testing.T) {
 	for _, testCase := range serializeBareItemDecimalTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemDecimal([]byte("prefix: "), testCase.input.Decimal)
+			got, err := serializeBareItemDecimal([]byte("prefix: "), testCase.input.Decimal())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemDecimal() error %v, want %v", err, testCase.wantError)
@@ -1143,7 +1143,7 @@ var serializeBareItemStringTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemString(t *testing.T) {
 	for _, testCase := range serializeBareItemStringTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemString([]byte("prefix: "), testCase.input.String)
+			got, err := serializeBareItemString([]byte("prefix: "), testCase.input.String())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemString() error %v, want %v", err, testCase.wantError)
@@ -1295,7 +1295,7 @@ var serializeBareItemTokenTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemToken(t *testing.T) {
 	for _, testCase := range serializeBareItemTokenTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemToken([]byte("prefix: "), testCase.input.Token)
+			got, err := serializeBareItemToken([]byte("prefix: "), testCase.input.Token())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemToken() error %v, want %v", err, testCase.wantError)
@@ -1428,7 +1428,7 @@ var serializeBareItemByteSequenceTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemByteSequence(t *testing.T) {
 	for _, testCase := range serializeBareItemByteSequenceTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemByteSequence([]byte("prefix: "), testCase.input.ByteSequence)
+			got, err := serializeBareItemByteSequence([]byte("prefix: "), testCase.input.ByteSequence())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemByteSequence() error %v, want %v", err, testCase.wantError)
@@ -1536,7 +1536,7 @@ var serializeBareItemBooleanTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemBoolean(t *testing.T) {
 	for _, testCase := range serializeBareItemBooleanTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemBoolean([]byte("prefix: "), testCase.input.Boolean)
+			got, err := serializeBareItemBoolean([]byte("prefix: "), testCase.input.Boolean())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemBoolean() error %v, want %v", err, testCase.wantError)
@@ -1684,7 +1684,7 @@ var serializeBareItemDateTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemDate(t *testing.T) {
 	for _, testCase := range serializeBareItemDateTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemDate([]byte("prefix: "), testCase.input.Date)
+			got, err := serializeBareItemDate([]byte("prefix: "), testCase.input.Date())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemDate() error %v, want %v", err, testCase.wantError)
@@ -1842,7 +1842,7 @@ var serializeBareItemDisplayStringTestCases = []serializeBareItemTestCase{
 func Test_serializeBareItemDisplayString(t *testing.T) {
 	for _, testCase := range serializeBareItemDisplayStringTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got, err := serializeBareItemDisplayString([]byte("prefix: "), testCase.input.DisplayString)
+			got, err := serializeBareItemDisplayString([]byte("prefix: "), testCase.input.DisplayString())
 
 			if !errors.Is(err, testCase.wantError) {
 				t.Fatalf("serializeBareItemDisplayString() error %v, want %v", err, testCase.wantError)
