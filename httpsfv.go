@@ -2,11 +2,15 @@
 package httpsfv
 
 import (
+	"encoding"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 	"unsafe"
 
@@ -78,7 +82,7 @@ func Parse[T Dictionary | Item | List](inputString string) (T, error) {
 	// 1. Convert input_bytes into an ASCII string input_string; if conversion fails, fail parsing.
 	//
 	// Note: We take a string, so we do not need to convert anything, but we must still check if the string contains only ASCII.
-	if !isAscii(inputString) {
+	if !isASCII(inputString) {
 		var zero T
 		return zero, ErrNonAsciiInput
 	}
@@ -130,7 +134,7 @@ func Parse[T Dictionary | Item | List](inputString string) (T, error) {
 //
 // If any input string cannot be parsed, an error is returned.
 //
-// Otherwise, the result of parsing the strings as one, joined by comma and space, is returned.
+// Otherwise, the result of parsing the strings as one, joined by a comma and a space, is returned.
 func ParseLines[T Dictionary | Item | List](inputStrings []string) (T, error) {
 	if len(inputStrings) == 0 {
 		var zero T
@@ -163,7 +167,14 @@ func decodeHex(b byte) byte {
 	panic("unreachable")
 }
 
-func isAscii(s string) bool {
+func encodeHex(b byte) (e1 byte, e2 byte) {
+	const hexTable = "0123456789abcdef"
+	e1 = hexTable[b>>4]
+	e2 = hexTable[b&0x0f]
+	return
+}
+
+func isASCII(s string) bool {
 	for _, c := range []byte(s) {
 		if c > 127 {
 			return false
@@ -281,6 +292,44 @@ func parseKey(inputString string) (key string, rest string, err error) {
 	return inputString[:curr], inputString[curr:], nil
 }
 
+// serializeKey serializes a key as specified in RFC 9651 section 4.1.1.3 "Serializing a Key".
+func serializeKey(dst []byte, inputKey string) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#ser-key
+	//
+	// 1. Convert input_key into a sequence of ASCII characters; if conversion fails, fail serialization.
+	if !isASCII(inputKey) {
+		return nil, errors.Join(ErrInvalidKey, ErrNonAsciiInput)
+	}
+
+	// 2. If input_key contains characters not in lcalpha, DIGIT, "_", "-", ".", or "*", fail serialization.
+	for _, char := range []byte(inputKey) {
+		switch {
+		case isLcalpha(char),
+			isRFC5234DIGIT(char),
+			char == '_',
+			char == '-',
+			char == '.',
+			char == '*':
+		default:
+			return nil, fmt.Errorf("%w: invalid character", ErrInvalidKey)
+		}
+	}
+
+	// 3. If the first character of input_key is not lcalpha or "*", fail serialization.
+	if inputKey == "" || (!isLcalpha(inputKey[0]) && inputKey[0] != '*') {
+		return nil, fmt.Errorf("%w: invalid or missing prefix character", ErrInvalidKey)
+	}
+
+	// 4. Let output be an empty string.
+	output := dst
+
+	// 5. Append input_key to output.
+	output = append(output, inputKey...)
+
+	// 6. Return output.
+	return output, nil
+}
+
 // BareItem represents a simple item without parameters.
 //
 // It acts as a tagged union, with [BareItem.Type] returning the type of the item.
@@ -386,6 +435,29 @@ func parseBareItem(inputString string) (v BareItem, rest string, err error) {
 	}
 
 	return
+}
+
+func serializeBareItem(dst []byte, b BareItem) ([]byte, error) {
+	switch b.Type {
+	case BareItemTypeInteger:
+		return serializeBareItemInteger(dst, b.Integer)
+	case BareItemTypeDecimal:
+		return serializeBareItemDecimal(dst, b.Decimal)
+	case BareItemTypeString:
+		return serializeBareItemString(dst, b.String)
+	case BareItemTypeToken:
+		return serializeBareItemToken(dst, b.Token)
+	case BareItemTypeByteSequence:
+		return serializeBareItemByteSequence(dst, b.ByteSequence)
+	case BareItemTypeBoolean:
+		return serializeBareItemBoolean(dst, b.Boolean)
+	case BareItemTypeDate:
+		return serializeBareItemDate(dst, b.Date)
+	case BareItemTypeDisplayString:
+		return serializeBareItemDisplayString(dst, b.DisplayString)
+	default:
+		panic(fmt.Sprintf("unknown BareItem type: %d", b.Type))
+	}
 }
 
 // parseBareItemIntegerOrDecimal parses an integer or decimal as specified in RFC 9651 section 4.3.4 "Parsing an Integer or Decimal".
@@ -494,6 +566,65 @@ func parseBareItemIntegerOrDecimal(inputString string) (v BareItem, rest string,
 	return BareItem{Type: type_, Decimal: outputNumberFloat}, inputString, nil
 }
 
+// serializeBareItemInteger serializes an integer as specified in RFC 9651 section 4.1.4 "Serializing an Integer".
+func serializeBareItemInteger(dst []byte, inputInteger int64) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#section-4.1.4
+	//
+	// 1. If input_integer is not an integer in the range of -999,999,999,999,999 to 999,999,999,999,999 inclusive, fail
+	//    serialization.
+	if inputInteger < -999_999_999_999_999 || inputInteger > 999_999_999_999_999 {
+		return nil, fmt.Errorf("%w: integer out of range", ErrInvalidIntegerOrDecimal)
+	}
+
+	// 2. Let output be an empty string.
+	output := dst
+
+	// 3. If input_integer is less than (but not equal to) 0, append "-" to output.
+	// 4. Append input_integer's numeric value represented in base 10 using only decimal digits to output.
+	output = strconv.AppendInt(output, inputInteger, 10)
+
+	// 5. Return output.
+	return output, nil
+}
+
+// serializeBareItemDecimal serializes a decimal as specified in RFC 9651 section 4.1.5 "Serializing a Decimal".
+func serializeBareItemDecimal(dst []byte, inputDecimal float64) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#section-4.1.5
+	//
+	// 1. If input_decimal is not a decimal number, fail serialization.
+	if math.IsNaN(inputDecimal) {
+		return nil, fmt.Errorf("%w: NaN", ErrInvalidIntegerOrDecimal)
+	}
+
+	// 2. If input_decimal has more than three significant digits to the right of the decimal point, round it to three
+	//    decimal places, rounding the final digit to the nearest value, or to the even value if it is equidistant.
+	inputDecimal = math.Round(inputDecimal*1_000) / 1_000
+
+	// 3. If input_decimal has more than 12 significant digits to the left of the decimal point after rounding, fail serialization.
+	if inputDecimal < -999_999_999_999 || inputDecimal > 999_999_999_999 {
+		return nil, fmt.Errorf("%w: decimal out of range", ErrInvalidIntegerOrDecimal)
+	}
+
+	// 4. Let output be an empty string.
+	output := dst
+
+	hasFractional := inputDecimal != math.Trunc(inputDecimal)
+
+	// 5. If input_decimal is less than (but not equal to) 0, append "-" to output.
+	// 6. Append input_decimal's integer component represented in base 10 (using only decimal digits) to output; if it is zero, append "0".
+	// 7. Append "." to output.
+	// 8. If input_decimal's fractional component is zero, append "0" to output.
+	// 9. Otherwise, append the significant digits of input_decimal's fractional component represented in base 10 (using only decimal digits) to output.
+	if hasFractional {
+		output = strconv.AppendFloat(output, inputDecimal, 'f', -1, 64)
+	} else {
+		output = strconv.AppendFloat(output, inputDecimal, 'f', 1, 64)
+	}
+
+	// 10. Return output.
+	return output, nil
+}
+
 // parseBareItemString parses a string as specified in RFC 9651 section 4.2.5 "Parsing a String".
 func parseBareItemString(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.5
@@ -564,6 +695,60 @@ func parseBareItemString(inputString string) (v BareItem, rest string, err error
 	return BareItem{}, "", fmt.Errorf("%w: missing closing quote", ErrInvalidString)
 }
 
+// serializeBareItemString serializes a string as specified in RFC 9651 section 4.1.6 "Serializing a String".
+func serializeBareItemString(dst []byte, inputString string) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#section-4.1.6
+	//
+	// 1. Convert input_string into a sequence of ASCII characters; if conversion fails, fail serialization.
+	if !isASCII(inputString) {
+		return nil, errors.Join(ErrInvalidString, ErrNonAsciiInput)
+	}
+
+	var toEscape int
+
+	// 2. If input_string contains characters in the range %x00-1f or %x7f-ff (i.e., not in VCHAR or SP), fail serialization.
+	for _, char := range []byte(inputString) {
+		if char <= 0x1f || char >= 0x7f {
+			return nil, fmt.Errorf("%w: invalid character", ErrInvalidString)
+		}
+
+		if char == '\\' || char == _DQUOTE {
+			toEscape++
+		}
+	}
+
+	dst = slices.Grow(dst, len(inputString)+2+toEscape)
+
+	// 3. Let output be the string DQUOTE.
+	output := append(dst, '"')
+
+	// 4. For each character char in input_string:
+	if toEscape == 0 {
+		// 1. If char is "\" or DQUOTE:
+		// -> We know that we do not need to escape anything
+
+		// 2. Append char to output.
+		// -> Since we do not need to escape anything we can just append the whole string at once
+		output = append(output, inputString...)
+	} else {
+		for _, char := range []byte(inputString) {
+			// 1. If char is "\" or DQUOTE:
+			if char == '\\' || char == _DQUOTE {
+				output = append(output, '\\')
+			}
+
+			// 2. Append char to output.
+			output = append(output, char)
+		}
+	}
+
+	// 5. Append DQUOTE to output.
+	output = append(output, '"')
+
+	// 6. Return output.
+	return output, nil
+}
+
 // parseBareItemToken parses a token as specified in RFC 9651 section 4.2.6 "Parsing a Token".
 func parseBareItemToken(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.6
@@ -596,7 +781,38 @@ func parseBareItemToken(inputString string) (v BareItem, rest string, err error)
 	return BareItem{Type: BareItemTypeToken, Token: inputString[:curr]}, inputString[curr:], nil
 }
 
-// parseBareItemByteSequence parses a byte sequence as specified in RFC 9651 section 4.2.7 "Parsing  Byte Sequence".
+// serializeBareItemToken serializes a token as specified in RFC 9651 section 4.1.7 "Serializing a Token".
+func serializeBareItemToken(dst []byte, inputToken string) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#name-serializing-a-token
+	//
+	// 1. Convert input_token into a sequence of ASCII characters; if conversion fails, fail serialization.
+	if !isASCII(inputToken) {
+		return nil, errors.Join(ErrInvalidToken, ErrNonAsciiInput)
+	}
+
+	// 2. If the first character of input_token is not ALPHA or "*", or the remaining portion contains a character not
+	// in tchar, ":", or "/", fail serialization.
+	if inputToken == "" || (!isRFC5234ALPHA(inputToken[0]) && inputToken[0] != '*') {
+		return nil, ErrInvalidToken
+	}
+
+	for _, char := range []byte(inputToken[1:]) {
+		if !isRFC9110tchar(char) && char != ':' && char != '/' {
+			return nil, ErrInvalidToken
+		}
+	}
+
+	// 3. Let output be an empty string.
+	output := dst
+
+	// 4. Append input_token to output.
+	output = append(output, inputToken...)
+
+	// 5. Return output.
+	return output, nil
+}
+
+// parseBareItemByteSequence parses a byte sequence as specified in RFC 9651 section 4.2.7 "Parsing a Byte Sequence".
 func parseBareItemByteSequence(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#name-parsing-a-byte-sequence
 	//
@@ -643,6 +859,31 @@ func parseBareItemByteSequence(inputString string) (v BareItem, rest string, err
 	return BareItem{Type: BareItemTypeByteSequence, ByteSequence: binaryContent}, inputString, nil
 }
 
+// serializeBareItemByteSequence serializes a byte sequence as specified in RFC 9651 section 4.1.8 "Serializing a Byte Sequence".
+func serializeBareItemByteSequence(dst []byte, inputBytes []byte) ([]byte, error) {
+	// https://www.rfc-editor.org/info/rfc9651/#name-serializing-a-byte-sequence
+	//
+	// 1. If input_bytes is not a sequence of bytes, fail serialization.
+	// Note: Not applicable
+
+	dst = slices.Grow(dst, 2+base64.StdEncoding.EncodedLen(len(inputBytes)))
+
+	// 2. Let output be an empty string.
+	output := dst
+
+	// 3. Append ":" to output.
+	output = append(output, ':')
+
+	// 4. Append the result of base64-encoding input_bytes as per [RFC4648], Section 4, taking account of the requirements below.
+	output = base64.StdEncoding.AppendEncode(output, inputBytes)
+
+	// 5. Append ":" to output.
+	output = append(output, ':')
+
+	// 6. Return output.
+	return output, nil
+}
+
 // parseBareItemBoolean parses a boolean as specified in RFC 9651 section 4.2.8 "Parsing a Boolean".
 func parseBareItemBoolean(inputString string) (v BareItem, rest string, err error) {
 	// https://www.rfc-editor.org/info/rfc9651/#section-4.2.8
@@ -671,6 +912,30 @@ func parseBareItemBoolean(inputString string) (v BareItem, rest string, err erro
 	return BareItem{}, "", ErrInvalidBoolean
 }
 
+// serializeBareItemBoolean serializes a boolean as specified in RFC 9651 section 4.1.9 "Serializing a Boolean".
+func serializeBareItemBoolean(dst []byte, inputBoolean bool) ([]byte, error) {
+	// https://www.rfc-editor.org/info/rfc9651/#name-serializing-a-boolean
+	//
+	// 1. If input_boolean is not a boolean, fail serialization.
+	// Note: Not applicable
+
+	// 2. Let output be an empty string.
+	output := dst
+
+	if inputBoolean {
+		// 3. Append "?" to output.
+		// 4. If input_boolean is true, append "1" to output.
+		output = append(output, '?', '1')
+	} else {
+		// 3. Append "?" to output.
+		// 5. If input_boolean is false, append "0" to output.
+		output = append(output, '?', '0')
+	}
+
+	// 6. Return output.
+	return output, nil
+}
+
 // parseBareItemDate parses a date as specified in RFC 9651 section 4.2.9 "Parsing a Date".
 func parseBareItemDate(inputString string) (v BareItem, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#section-4.2.9
@@ -696,6 +961,20 @@ func parseBareItemDate(inputString string) (v BareItem, rest string, err error) 
 
 	// 5. Return output_date.
 	return BareItem{Type: BareItemTypeDate, Date: v.Integer}, inputString, nil
+}
+
+// serializeBareItemDate serializes a date as specified in RFC 9651 section 4.1.10 "Serializing a Date".
+func serializeBareItemDate(dst []byte, inputDate int64) ([]byte, error) {
+	// https://www.rfc-editor.org/info/rfc9651/#section-4.1.10
+	//
+	// 1. Let output be "@".
+	output := append(dst, '@')
+
+	// 2. Append to output the result of running Serializing an Integer with input_date (Section 4.1.4).
+	output, err := serializeBareItemInteger(output, inputDate)
+
+	// 3. Return output.
+	return output, err
 }
 
 // parseBareItemDisplayString parses a display string as specified in RFC 9651 section 4.2.10 "Parsing a Display String".
@@ -792,6 +1071,87 @@ func parseBareItemDisplayString(inputString string) (v BareItem, rest string, er
 
 	// 5. Reached the end of input_string without finding a closing DQUOTE; fail parsing.
 	return BareItem{}, "", fmt.Errorf("%w: missing closing quote", ErrInvalidDisplayString)
+}
+
+// serializeBareItemDisplayString serializes a display string as specified in RFC 9651 section 4.1.11 "Serializing a Display String".
+func serializeBareItemDisplayString(dst []byte, inputSequence string) ([]byte, error) {
+	// https://www.rfc-editor.org/info/rfc9651/#section-4.1.11
+	//
+	// 1. If input_sequence is not a sequence of Unicode code points, fail serialization.
+	var nonASCII int
+
+	for i := 0; i < len(inputSequence); {
+		r, sz := utf8.DecodeRuneInString(inputSequence[i:])
+
+		// See point 1 above.
+		if r == utf8.RuneError {
+			return nil, fmt.Errorf("%w: invalid UTF-8", ErrInvalidDisplayString)
+		}
+
+		// See point 2 below.
+		if unicode.Is(unicode.Cs, r) {
+			return nil, fmt.Errorf("%w: invalid unicode", ErrInvalidDisplayString)
+		}
+
+		i += sz
+
+		if sz > 1 || (byte(r) == '%' || byte(r) == _DQUOTE || byte(r) <= 0x1f || byte(r) >= 0x7f) {
+			nonASCII++
+		}
+	}
+
+	// 2. Let byte_array be the result of applying UTF-8 encoding (Section 3 of [UTF8]) to input_sequence. If encoding
+	//    fails, fail serialization.
+	byteArray := inputSequence
+
+	dst = slices.Grow(dst, 3+len(byteArray)+2*nonASCII)
+
+	// 3. Let encoded_string be a string containing "%" followed by DQUOTE.
+	encodedString := append(dst, '%', _DQUOTE)
+
+	// 4. For each byte in byte_array:
+	if nonASCII == 0 {
+		// 1. If byte is %x25 ("%"), %x22 (DQUOTE), or in the ranges %x00-1f or %x7f-ff:
+		// -> We know that no byte needs encoding, so we can skip this.
+
+		// 2. Otherwise, decode byte as an ASCII character and append the result to encoded_string.
+		// -> Since nothing needs encoding and everything is ASCII we can just append the characters directly.
+		encodedString = append(encodedString, byteArray...)
+	} else {
+		for _, byte_ := range []byte(byteArray) {
+			// 1. If byte is %x25 ("%"), %x22 (DQUOTE), or in the ranges %x00-1f or %x7f-ff:
+			if byte_ == '%' || byte_ == _DQUOTE || byte_ <= 0x1f || byte_ >= 0x7f {
+				// 1. Append "%" to encoded_string.
+				encodedString = append(encodedString, '%')
+
+				// 2. Let encoded_byte be the result of applying base16 encoding (Section 8 of [RFC4648]) to byte, with
+				// any alphabetic characters converted to lowercase.
+				encodedByte1, encodedByte2 := encodeHex(byte_)
+
+				// 3. Append encoded_byte to encoded_string.
+				encodedString = append(encodedString, encodedByte1, encodedByte2)
+				continue
+			}
+
+			// 2. Otherwise, decode byte as an ASCII character and append the result to encoded_string.
+			encodedString = append(encodedString, byte_)
+		}
+	}
+
+	// 5. Append DQUOTE to encoded_string.
+	encodedString = append(encodedString, _DQUOTE)
+
+	// 6. Return encoded_string.
+	return encodedString, nil
+}
+
+var _ encoding.TextAppender = (*BareItem)(nil)
+
+// AppendText implements the [encoding.TextAppender] interface.
+//
+// It panics if b's type is not a valid value.
+func (b *BareItem) AppendText(text []byte) ([]byte, error) {
+	return serializeBareItem(text, *b)
 }
 
 // String returns the type name, which is the name of the constant minus the type prefix.
@@ -908,6 +1268,72 @@ func parseDictionary(inputString string) (v Dictionary, rest string, err error) 
 	return Dictionary{members}, inputString, nil
 }
 
+// serializeDictionary serializes a list as specified in RFC 9651 section 4.1.2 "Serializing a Dictionary".
+func serializeDictionary(dst []byte, inputDictionary Dictionary) ([]byte, error) {
+	var err error
+
+	// From https://www.rfc-editor.org/info/rfc9651/#section-4.1.2
+	//
+	// 1. Let output be an empty string..
+	output := dst
+
+	var idx int
+
+	// 2. For each member_key with a value of (member_value, parameters) in input_dictionary:
+	for memberKey, memberValue := range inputDictionary.All() {
+		// 1. Append the result of running Serializing a Key (Section 4.1.1.3) with member's member_key to output.
+		output, err = serializeKey(output, memberKey)
+		if err != nil {
+			return nil, errors.Join(ErrInvalidDictionary, err)
+		}
+
+		switch {
+		// 2. If member_value is Boolean true:
+		case memberValue.Type == ItemOrInnerListTypeItem &&
+			memberValue.Item.Type == BareItemTypeBoolean &&
+			memberValue.Item.Boolean:
+			// 1. Append the result of running Serializing Parameters (Section 4.1.1.2) with parameters to output.
+			output, err = serializeParameters(output, memberValue.Item.Parameters)
+		// 3. Otherwise:
+		default:
+			// 1. Append "=" to output.
+			output = append(output, '=')
+
+			switch memberValue.Type {
+			// 2. If member_value is an array, append the result of running Serializing an Inner List (Section 4.1.1.1) with (member_value, parameters) to output.
+			case ItemOrInnerListTypeInnerList:
+				output, err = serializeInnerList(output, memberValue.InnerList)
+			// 3. Otherwise, append the result of running Serializing an Item (Section 4.1.3) with (member_value, parameters) to output.
+			case ItemOrInnerListTypeItem:
+				output, err = serializeItem(output, memberValue.Item)
+			}
+		}
+
+		if err != nil {
+			return nil, errors.Join(ErrInvalidDictionary, err)
+		}
+
+		// 4. If more members remain in input_dictionary:
+		if idx < inputDictionary.Len()-1 {
+			// 1. Append "," to output.
+			// 2. Append a single SP to output.
+			output = append(output, ',', _SP)
+		}
+
+		idx++
+	}
+
+	// 3. Return output.
+	return output, nil
+}
+
+var _ encoding.TextAppender = (*Dictionary)(nil)
+
+// AppendText implements the [encoding.TextAppender] interface.
+func (d *Dictionary) AppendText(text []byte) ([]byte, error) {
+	return serializeDictionary(text, *d)
+}
+
 // InnerList represents an inner list as specified in RFC 9651 section 3.1.1.
 type InnerList struct {
 	// Members contains the members of the list.
@@ -975,6 +1401,49 @@ func parseInnerList(inputString string) (v InnerList, rest string, err error) {
 	return InnerList{}, "", fmt.Errorf("%w: unexpected end of inner list", ErrInvalidInnerList)
 }
 
+// serializeInnerList serializes an inner list as specified in RFC 9651 section 4.1.1.2 "Serializing an Inner List".
+func serializeInnerList(dst []byte, il InnerList) ([]byte, error) {
+	var err error
+
+	// From https://www.rfc-editor.org/info/rfc9651/#name-serializing-an-inner-list
+	//
+	// 1. Let output be the string "(".
+	output := append(dst, '(')
+
+	// 2. For each (member_value, parameters) of inner_list:
+	for i, member := range il.Members {
+		// 1. Append the result of running Serializing an Item (Section 4.1.3) with (member_value, parameters) to output.
+		output, err = serializeItem(output, member)
+		if err != nil {
+			return nil, errors.Join(ErrInvalidInnerList, err)
+		}
+
+		// 2. If more values remain in inner_list, append a single SP to output.
+		if i < len(il.Members)-1 {
+			output = append(output, ' ')
+		}
+	}
+
+	// 3. Append ")" to output.
+	output = append(output, ')')
+
+	// 4. Append the result of running Serializing Parameters (Section 4.1.1.2) with list_parameters to output.
+	output, err = serializeParameters(output, il.Parameters)
+	if err != nil {
+		return nil, errors.Join(ErrInvalidInnerList, err)
+	}
+
+	// 5. Return output.
+	return output, nil
+}
+
+var _ encoding.TextAppender = (*InnerList)(nil)
+
+// AppendText implements the [encoding.TextAppender] interface.
+func (il *InnerList) AppendText(text []byte) ([]byte, error) {
+	return serializeInnerList(text, *il)
+}
+
 // Item represents a single item with optional parameters as specified in RFC 9651 section 3.3.
 type Item struct {
 	// BareItem contains the bare item without parameters.
@@ -1002,6 +1471,38 @@ func parseItem(inputString string) (v Item, rest string, err error) {
 
 	// 3. Return the tuple (bare_item, parameters).
 	return Item{BareItem: item, Parameters: params}, inputString, nil
+}
+
+// serializeItem serializes an item as specified in RFC 9651 section 4.1.3 "Serializing an item".
+func serializeItem(dst []byte, i Item) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#section-4.1.3
+	//
+	// Let output be an empty string.
+	output := dst
+
+	var err error
+
+	// 2. Append the result of running Serializing a Bare Item (Section 4.1.3.1) with bare_item to output.
+	output, err = serializeBareItem(output, i.BareItem)
+	if err != nil {
+		return nil, errors.Join(ErrInvalidItem, err)
+	}
+
+	// 3. Append the result of running Serializing Parameters (Section 4.1.1.2) with item_parameters to output.
+	output, err = serializeParameters(output, i.Parameters)
+	if err != nil {
+		return nil, errors.Join(ErrInvalidItem, err)
+	}
+
+	// 4. Return output.
+	return output, nil
+}
+
+var _ encoding.TextAppender = (*Item)(nil)
+
+// AppendText implements the [encoding.TextAppender] interface.
+func (i *Item) AppendText(text []byte) ([]byte, error) {
+	return serializeItem(text, *i)
 }
 
 // ItemOrInnerList contains either an [Item] or [InnerList] as part of a [Dictionary] or [List].
@@ -1068,17 +1569,6 @@ type List struct {
 	Members []ItemOrInnerList
 }
 
-// ListMemberType is an enum of types that a ListMember can contain.
-type ListMemberType uint8
-
-const (
-	// ListMemberTypeInnerList denotes a ListMember containing an InnerList.
-	ListMemberTypeInnerList ListMemberType = iota
-
-	// ListMemberTypeItem denotes a ListMember containing an Item.
-	ListMemberTypeItem
-)
-
 // parseList parses a list as specified in RFC 9651 section 4.2.1 "Parsing a List".
 func parseList(inputString string) (v List, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#name-parsing-a-list
@@ -1127,16 +1617,47 @@ func parseList(inputString string) (v List, rest string, err error) {
 	return List{}, inputString, nil
 }
 
-// String returns the type name, which is the name of the constant minus the type prefix.
-func (l ListMemberType) String() string {
-	switch l {
-	case ListMemberTypeInnerList:
-		return "InnerList"
-	case ListMemberTypeItem:
-		return "Item"
-	default:
-		panic(fmt.Sprintf("unknown ListMemberType %d", uint8(l)))
+// serializeList serializes a list as specified in RFC 9651 section 4.1.1 "Serializing a List".
+func serializeList(dst []byte, inputList List) ([]byte, error) {
+	var err error
+
+	// From https://www.rfc-editor.org/info/rfc9651/#name-serializing-a-list
+	//
+	// 1. Let output be an empty string.
+	output := dst
+
+	// 2. For each (member_value, parameters) of input_list:
+	for i, member := range inputList.Members {
+		switch member.Type {
+		case ItemOrInnerListTypeInnerList:
+			// 1. If member_value is an array, append the result of running Serializing an Inner List (Section 4.1.1.1) with (member_value, parameters) to output.
+			output, err = serializeInnerList(output, member.InnerList)
+		case ItemOrInnerListTypeItem:
+			// 2. Otherwise, append the result of running Serializing an Item (Section 4.1.3) with (member_value, parameters) to output.
+			output, err = serializeItem(output, member.Item)
+		}
+
+		if err != nil {
+			return nil, errors.Join(ErrInvalidList, err)
+		}
+
+		// 3. If more member_values remain in input_list:
+		if i < len(inputList.Members)-1 {
+			// 1. Append "," to output.
+			// 2. Append a single SP to output.
+			output = append(output, ',', _SP)
+		}
 	}
+
+	// 3. Return output.
+	return output, nil
+}
+
+var _ encoding.TextAppender = (*List)(nil)
+
+// AppendText implements the [encoding.TextAppender] interface.
+func (l *List) AppendText(text []byte) ([]byte, error) {
+	return serializeList(text, *l)
 }
 
 // Parameters is an ordered map of parameters that can be added to a [InnerList], [Item] or [List].
@@ -1193,4 +1714,47 @@ func parseParameters(inputString string) (v Parameters, rest string, err error) 
 
 	// 3. Return parameters.
 	return Parameters{m}, inputString, nil
+}
+
+// serializeParameters serializes parameters as specified in RFC 9651 section 4.1.1.2 "Serializing Parameters".
+func serializeParameters(dst []byte, p Parameters) ([]byte, error) {
+	// From https://www.rfc-editor.org/info/rfc9651/#name-serializing-parameters
+	//
+	// 1. Let output be an empty string.
+	output := dst
+
+	// 2. For each param_key with a value of param_value in input_parameters:
+	for paramKey, paramValue := range p.All() {
+		// 1. Append ";" to output.
+		output = append(output, ';')
+
+		// 2. Append the result of running Serializing a Key (Section 4.1.1.3) with param_key to output.
+		var err error
+		output, err = serializeKey(output, paramKey)
+		if err != nil {
+			return nil, errors.Join(ErrInvalidParameters, err)
+		}
+
+		// 4. If param_value is not Boolean true:
+		if paramValue.Type != BareItemTypeBoolean || !paramValue.Boolean {
+			// 1. Append "=" to output.
+			output = append(output, '=')
+
+			// 2. Append the result of running Serializing a bare Item (Section 4.1.3.1) with param_value to output.
+			output, err = serializeBareItem(output, paramValue)
+			if err != nil {
+				return nil, errors.Join(ErrInvalidParameters, err)
+			}
+		}
+	}
+
+	// 3. Return output.
+	return output, nil
+}
+
+var _ encoding.TextAppender = (*Parameters)(nil)
+
+// AppendText implements the [encoding.TextAppender] interface.
+func (p *Parameters) AppendText(text []byte) ([]byte, error) {
+	return serializeParameters(text, *p)
 }

@@ -3,6 +3,7 @@ package httpsfv
 import (
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -535,6 +536,81 @@ func Test_parseKey(t *testing.T) {
 	}
 }
 
+func Test_serializeKey(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		want      string
+		wantError error
+	}{
+		{
+			name:  "lower case alpha only",
+			input: `hello`,
+			want:  `hello`,
+		},
+		{
+			name:  "star",
+			input: `*`,
+			want:  `*`,
+		},
+		{
+			name:  "star follow by more",
+			input: `*hello`,
+			want:  `*hello`,
+		},
+		{
+			name:  "complex",
+			input: `*h_1-9.*`,
+			want:  `*h_1-9.*`,
+		},
+		{
+			name:      "empty",
+			input:     ``,
+			wantError: ErrInvalidKey,
+		},
+		{
+			name:      "non-ascii",
+			input:     `hällo`,
+			wantError: ErrInvalidKey,
+		},
+		{
+			name:      "first character digit",
+			input:     `1ello`,
+			wantError: ErrInvalidKey,
+		},
+		{
+			name:      "first character upper case alpha",
+			input:     `Hello`,
+			wantError: ErrInvalidKey,
+		},
+		{
+			name:      "invalid character after first",
+			input:     `hEllo`,
+			wantError: ErrInvalidKey,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeKey([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeKey() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeKey() got = %q, want %q", string(got), want)
+			}
+		})
+	}
+}
+
 type parseBareItemTestCase struct {
 	name         string
 	input        string
@@ -561,6 +637,61 @@ func Test_parseBareItem(t *testing.T) {
 
 			if gotRest != testCase.wantRest {
 				t.Errorf("parseBareItem() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+type serializeBareItemTestCase struct {
+	name      string
+	input     BareItem
+	want      string
+	wantError error
+}
+
+var serializeBareItemTestCases []serializeBareItemTestCase
+
+func Test_serializeBareItem(t *testing.T) {
+	for _, testCase := range serializeBareItemTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItem([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItem() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			gotStr := string(got)
+			want := "prefix: " + testCase.want
+
+			if gotStr != want {
+				t.Errorf("serializeBareItem() got = %q, want %q", gotStr, want)
+			}
+		})
+	}
+}
+
+func TestBareItem_AppendText(t *testing.T) {
+	for _, testCase := range serializeBareItemTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.input.AppendText([]byte("prefix: "))
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("BareItem.AppendText() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			gotStr := string(got)
+			want := "prefix: " + testCase.want
+
+			if gotStr != want {
+				t.Errorf("BareItem.AppendText() got = %q, want %q", gotStr, want)
 			}
 		})
 	}
@@ -714,6 +845,171 @@ func Test_parseBareItemIntegerOrDecimal(t *testing.T) {
 	}
 }
 
+var serializeBareItemIntegerTestCases = []serializeBareItemTestCase{
+	{
+		name:  "zero",
+		input: BareItem{Type: BareItemTypeInteger, Integer: 0},
+		want:  "0",
+	},
+	{
+		name:  "positive",
+		input: BareItem{Type: BareItemTypeInteger, Integer: 123_456},
+		want:  "123456",
+	},
+	{
+		name:  "negative",
+		input: BareItem{Type: BareItemTypeInteger, Integer: -123_456},
+		want:  "-123456",
+	},
+	{
+		name:  "positive at range end",
+		input: BareItem{Type: BareItemTypeInteger, Integer: 999_999_999_999_999},
+		want:  "999999999999999",
+	},
+	{
+		name:  "negative at range end",
+		input: BareItem{Type: BareItemTypeInteger, Integer: -999_999_999_999_999},
+		want:  "-999999999999999",
+	},
+	{
+		name:      "positive outside range",
+		input:     BareItem{Type: BareItemTypeInteger, Integer: 999_999_999_999_999 + 1},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+	{
+		name:      "negative outside range",
+		input:     BareItem{Type: BareItemTypeInteger, Integer: -999_999_999_999_999 - 1},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+}
+
+func Test_serializeBareItemInteger(t *testing.T) {
+	for _, testCase := range serializeBareItemIntegerTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemInteger([]byte("prefix: "), testCase.input.Integer)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemInteger() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemInteger() got = %q, want %q", string(got), want)
+			}
+		})
+	}
+}
+
+var serializeBareItemDecimalTestCases = []serializeBareItemTestCase{
+	{
+		name:  "zero",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: 0},
+		want:  "0.0",
+	},
+	{
+		name:      "NaN",
+		input:     BareItem{Type: BareItemTypeDecimal, Decimal: math.NaN()},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+	{
+		name:      "+Inf",
+		input:     BareItem{Type: BareItemTypeDecimal, Decimal: math.Inf(0)},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+	{
+		name:      "-Inf",
+		input:     BareItem{Type: BareItemTypeDecimal, Decimal: math.Inf(1)},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+	{
+		name:  "positive",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.0},
+		want:  "123456.0",
+	},
+	{
+		name:  "negative",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.0},
+		want:  "-123456.0",
+	},
+	{
+		name:  "positive with full precision",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.789},
+		want:  "123456.789",
+	},
+	{
+		name:  "negative with full precision",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.789},
+		want:  "-123456.789",
+	},
+	{
+		name:  "positive rounded up",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.7895},
+		want:  "123456.79",
+	},
+	{
+		name:  "negative rounded up",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.7895},
+		want:  "-123456.79",
+	},
+	{
+		name:  "positive rounded down",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.7894},
+		want:  "123456.789",
+	},
+	{
+		name:  "negative rounded down",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.7894},
+		want:  "-123456.789",
+	},
+	{
+		name:  "positive at range end",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: 999_999_999_999.0},
+		want:  "999999999999.0",
+	},
+	{
+		name:  "negative at range end",
+		input: BareItem{Type: BareItemTypeDecimal, Decimal: -999_999_999_999.0},
+		want:  "-999999999999.0",
+	},
+	{
+		name:      "positive outside range",
+		input:     BareItem{Type: BareItemTypeDecimal, Decimal: 999_999_999_999 + 1},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+	{
+		name:      "negative outside range",
+		input:     BareItem{Type: BareItemTypeDecimal, Decimal: -999_999_999_999 - 1},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+}
+
+func Test_serializeBareItemDecimal(t *testing.T) {
+	for _, testCase := range serializeBareItemDecimalTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemDecimal([]byte("prefix: "), testCase.input.Decimal)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemDecimal() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemDecimal() got = %q, want %q", string(got), want)
+			}
+		})
+	}
+}
+
 var parseBareItemStringTestCases = []parseBareItemTestCase{
 	{
 		name:         "empty input",
@@ -797,6 +1093,61 @@ func Test_parseBareItemString(t *testing.T) {
 	}
 }
 
+var serializeBareItemStringTestCases = []serializeBareItemTestCase{
+	{
+		name:  "empty",
+		input: BareItem{Type: BareItemTypeString, String: ``},
+		want:  `""`,
+	},
+	{
+		name:  "simple",
+		input: BareItem{Type: BareItemTypeString, String: `hello world`},
+		want:  `"hello world"`,
+	},
+	{
+		name:  "with backslashes",
+		input: BareItem{Type: BareItemTypeString, String: `\a \ will be escaped\`},
+		want:  `"\\a \\ will be escaped\\"`,
+	},
+	{
+		name:  "with quotes",
+		input: BareItem{Type: BareItemTypeString, String: `"hello "awesome" world"`},
+		want:  `"\"hello \"awesome\" world\""`,
+	},
+	{
+		name:  "with backslashes and quotes",
+		input: BareItem{Type: BareItemTypeString, String: `with \ and "`},
+		want:  `"with \\ and \""`,
+	},
+	{
+		name:      "non-ascii",
+		input:     BareItem{Type: BareItemTypeString, String: "\u26a1"},
+		wantError: ErrInvalidString,
+	},
+}
+
+func Test_serializeBareItemString(t *testing.T) {
+	for _, testCase := range serializeBareItemStringTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemString([]byte("prefix: "), testCase.input.String)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemString() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemString() got = %q, want %q", string(got), want)
+			}
+		})
+	}
+}
+
 var parseBareItemTokenTestCases = []parseBareItemTestCase{
 	{
 		name:         "empty input",
@@ -870,6 +1221,80 @@ func Test_parseBareItemToken(t *testing.T) {
 
 			if gotRest != testCase.wantRest {
 				t.Errorf("parseBareItemToken() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+var serializeBareItemTokenTestCases = []serializeBareItemTestCase{
+	{
+		name:  "simple lower case",
+		input: BareItem{Type: BareItemTypeToken, Token: `hello`},
+		want:  `hello`,
+	},
+	{
+		name:  "simple upper case",
+		input: BareItem{Type: BareItemTypeToken, Token: `HELLO`},
+		want:  `HELLO`,
+	},
+	{
+		name:  "simple mixed case",
+		input: BareItem{Type: BareItemTypeToken, Token: `HeLlO`},
+		want:  `HeLlO`,
+	},
+	{
+		name:  "star",
+		input: BareItem{Type: BareItemTypeToken, Token: `*`},
+		want:  `*`,
+	},
+	{
+		name:  "star followed by more",
+		input: BareItem{Type: BareItemTypeToken, Token: `*hello*`},
+		want:  `*hello*`,
+	},
+	{
+		name:  "complex",
+		input: BareItem{Type: BareItemTypeToken, Token: `*hello:complex/token*`},
+		want:  `*hello:complex/token*`,
+	},
+	{
+		name:      "empty",
+		input:     BareItem{Type: BareItemTypeToken, Token: ``},
+		wantError: ErrInvalidToken,
+	},
+	{
+		name:      "invalid start",
+		input:     BareItem{Type: BareItemTypeToken, Token: `\`},
+		wantError: ErrInvalidToken,
+	}, {
+		name:      "invalid characters",
+		input:     BareItem{Type: BareItemTypeToken, Token: `a b`},
+		wantError: ErrInvalidToken,
+	},
+	{
+		name:      "non-ascii",
+		input:     BareItem{Type: BareItemTypeToken, Token: "\u26a1"},
+		wantError: ErrInvalidToken,
+	},
+}
+
+func Test_serializeBareItemToken(t *testing.T) {
+	for _, testCase := range serializeBareItemTokenTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemToken([]byte("prefix: "), testCase.input.Token)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemToken() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemToken() got = %q, want %q", string(got), want)
 			}
 		})
 	}
@@ -968,6 +1393,46 @@ func Test_parseBareItemByteSequence(t *testing.T) {
 	}
 }
 
+var serializeBareItemByteSequenceTestCases = []serializeBareItemTestCase{
+	{
+		name:  "empty",
+		input: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte(``)},
+		want:  `::`,
+	},
+	{
+		name:  "non-empty",
+		input: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte(`hello world`)},
+		want:  `:aGVsbG8gd29ybGQ=:`,
+	},
+	{
+		name:  "unicode",
+		input: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte(`hällo wörld`)},
+		want:  `:aMOkbGxvIHfDtnJsZA==:`,
+	},
+}
+
+func Test_serializeBareItemByteSequence(t *testing.T) {
+	for _, testCase := range serializeBareItemByteSequenceTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemByteSequence([]byte("prefix: "), testCase.input.ByteSequence)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemByteSequence() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemByteSequence() got = %q, want %q", string(got), want)
+			}
+		})
+	}
+}
+
 var parseBareItemBooleanTestCases = []parseBareItemTestCase{
 	{
 		name:         "empty input",
@@ -1036,6 +1501,41 @@ func Test_parseBareItemBoolean(t *testing.T) {
 
 			if gotRest != testCase.wantRest {
 				t.Errorf("parseBareItemBoolean() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+var serializeBareItemBooleanTestCases = []serializeBareItemTestCase{
+	{
+		name:  "false",
+		input: BareItem{Type: BareItemTypeBoolean, Boolean: false},
+		want:  `?0`,
+	},
+	{
+		name:  "true",
+		input: BareItem{Type: BareItemTypeBoolean, Boolean: true},
+		want:  `?1`,
+	},
+}
+
+func Test_serializeBareItemBoolean(t *testing.T) {
+	for _, testCase := range serializeBareItemBooleanTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemBoolean([]byte("prefix: "), testCase.input.Boolean)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemBoolean() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemBoolean() got = %q, want %q", string(got), want)
 			}
 		})
 	}
@@ -1129,6 +1629,66 @@ func Test_parseBareItemDate(t *testing.T) {
 	}
 }
 
+var serializeBareItemDateTestCases = []serializeBareItemTestCase{
+	{
+		name:  "zero",
+		input: BareItem{Type: BareItemTypeDate, Date: 0},
+		want:  "@0",
+	},
+	{
+		name:  "positive",
+		input: BareItem{Type: BareItemTypeDate, Date: 123_456},
+		want:  "@123456",
+	},
+	{
+		name:  "negative",
+		input: BareItem{Type: BareItemTypeDate, Date: -123_456},
+		want:  "@-123456",
+	},
+	{
+		name:  "positive at range end",
+		input: BareItem{Type: BareItemTypeDate, Date: 999_999_999_999_999},
+		want:  "@999999999999999",
+	},
+	{
+		name:  "negative at range end",
+		input: BareItem{Type: BareItemTypeDate, Date: -999_999_999_999_999},
+		want:  "@-999999999999999",
+	},
+	{
+		name:      "positive outside range",
+		input:     BareItem{Type: BareItemTypeDate, Date: 999_999_999_999_999 + 1},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+	{
+		name:      "negative outside range",
+		input:     BareItem{Type: BareItemTypeDate, Date: -999_999_999_999_999 - 1},
+		wantError: ErrInvalidIntegerOrDecimal,
+	},
+}
+
+func Test_serializeBareItemDate(t *testing.T) {
+	for _, testCase := range serializeBareItemDateTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemDate([]byte("prefix: "), testCase.input.Date)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemDate() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemDate() got = %q, want %q", string(got), want)
+			}
+		})
+	}
+}
+
 var parseBareItemDisplayStringTestCases = []parseBareItemTestCase{
 	{
 		name:         "empty input",
@@ -1217,6 +1777,71 @@ func Test_parseBareItemDisplayString(t *testing.T) {
 
 			if gotRest != testCase.wantRest {
 				t.Errorf("parseBareItemDisplayString() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+var serializeBareItemDisplayStringTestCases = []serializeBareItemTestCase{
+	{
+		name:  "empty",
+		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: ``},
+		want:  `%""`,
+	},
+	{
+		name:  "simple",
+		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `hello world`},
+		want:  `%"hello world"`,
+	},
+	{
+		name:  "unicode",
+		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `üsers`},
+		want:  `%"%c3%bcsers"`,
+	},
+	{
+		name:  "with backslashes",
+		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `unescaped \`},
+		want:  `%"unescaped \"`,
+	},
+	{
+		name:  "with percent sign",
+		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `escaped %`},
+		want:  `%"escaped %25"`,
+	},
+	{
+		name:  "with quotes",
+		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `escaped "`},
+		want:  `%"escaped %22"`,
+	},
+	{
+		name:      "invalid unicode",
+		input:     BareItem{Type: BareItemTypeDisplayString, DisplayString: string([]byte{0b10000000})},
+		wantError: ErrInvalidDisplayString,
+	},
+	{
+		name:      "invalid utf-8",
+		input:     BareItem{Type: BareItemTypeDisplayString, DisplayString: string([]byte{0xdf, 0xff})},
+		wantError: ErrInvalidDisplayString,
+	},
+}
+
+func Test_serializeBareItemDisplayString(t *testing.T) {
+	for _, testCase := range serializeBareItemDisplayStringTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeBareItemDisplayString([]byte("prefix: "), testCase.input.DisplayString)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeBareItemDisplayString() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeBareItemDisplayString() got = %q, want %q", string(got), want)
 			}
 		})
 	}
@@ -1339,6 +1964,151 @@ func Test_parseDictionary(t *testing.T) {
 	}
 }
 
+type serializeDictionaryTestCase struct {
+	name      string
+	input     Dictionary
+	want      string
+	wantError error
+}
+
+var serializeDictionaryTestCases = []serializeDictionaryTestCase{
+	{
+		name: "empty",
+		want: ``,
+	},
+	{
+		name: "single inner list",
+		input: dict(
+			"key1", InnerList{Members: []Item{
+				{
+					BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+					Parameters: params(
+						"param1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+						"param2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+					),
+				},
+			}},
+		),
+		want: `key1=(token;param1=value1;param2=value2)`,
+	},
+	{
+		name: "single item",
+		input: dict(
+			"key1", Item{
+				BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+				Parameters: params(
+					"param1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+					"param2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+				),
+			},
+		),
+		want: `key1=token;param1=value1;param2=value2`,
+	},
+	{
+		name: "boolean false",
+		input: dict(
+			"key1", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
+		),
+		want: `key1=?0`,
+	},
+	{
+		name: "boolean true",
+		input: dict(
+			"key1", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+		),
+		want: `key1`,
+	},
+	{
+		name: "mixed dictionary",
+		input: dict(
+			"a", Item{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
+			"b", Item{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+			"c", InnerList{
+				Members: []Item{
+					{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
+					{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+				},
+			},
+			"d", Item{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
+			"e", Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+			"f", InnerList{
+				Members: []Item{
+					{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
+					{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+				},
+			},
+		),
+		want: `a=123, b=123.456, c=(?0 ?1), d=@123456, e=token, f=("string" %"display string")`,
+	},
+	{
+		name: "invalid key",
+		input: dict(
+			"", Item{BareItem: BareItem{Type: BareItemTypeToken, Token: `token`}},
+		),
+		wantError: ErrInvalidDictionary,
+	},
+	{
+		name: "invalid inner list",
+		input: dict(
+			"key1", InnerList{Members: []Item{
+				{BareItem: BareItem{Type: BareItemTypeToken}},
+			}},
+		),
+		wantError: ErrInvalidDictionary,
+	},
+	{
+		name: "invalid item",
+		input: dict(
+			"key1", Item{BareItem: BareItem{Type: BareItemTypeToken}},
+		),
+		wantError: ErrInvalidDictionary,
+	},
+}
+
+func Test_serializeDictionary(t *testing.T) {
+	for _, testCase := range serializeDictionaryTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeDictionary([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeDictionary() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeDictionary() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestDictionary_AppendText(t *testing.T) {
+	for _, testCase := range serializeDictionaryTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.input.AppendText([]byte("prefix: "))
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("Dictionary.AppendText() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("Dictionary.AppendText() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 type parseInnerListTestCase struct {
 	name      string
 	input     string
@@ -1443,6 +2213,126 @@ func Test_parseInnerList(t *testing.T) {
 	}
 }
 
+type serializeInnerListTestCase struct {
+	name      string
+	input     InnerList
+	want      string
+	wantError error
+}
+
+var serializeInnerListTestCases = []serializeInnerListTestCase{
+	{
+		name: "empty",
+		want: `()`,
+	},
+	{
+		name: "single member",
+		input: InnerList{Members: []Item{
+			{BareItem: BareItem{Type: BareItemTypeToken, Token: `token`}},
+		}},
+		want: `(token)`,
+	},
+	{
+		name: "multiple members",
+		input: InnerList{
+			Members: []Item{
+				{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
+				{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
+				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+				{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
+				{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+				{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
+				{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+				{BareItem: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")}},
+			},
+		},
+		want: `(123 123.456 ?0 ?1 @123456 token "string" %"display string" :dGVzdA==:)`,
+	},
+	{
+		name: "with parameters",
+		input: InnerList{
+			Members: []Item{
+				{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
+				{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
+				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+				{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
+				{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+				{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
+				{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+				{BareItem: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")}},
+			},
+			Parameters: params(
+				"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+				"key2", BareItem{Type: BareItemTypeString, String: "value2"},
+			),
+		},
+		want: `(123 123.456 ?0 ?1 @123456 token "string" %"display string" :dGVzdA==:);key1=value1;key2="value2"`,
+	},
+	{
+		name: "invalid value",
+		input: InnerList{Members: []Item{
+			{BareItem: BareItem{Type: BareItemTypeToken, Token: ``}},
+		}},
+		wantError: ErrInvalidInnerList,
+	},
+	{
+		name: "invalid parameters",
+		input: InnerList{Members: []Item{
+			{
+				BareItem:   BareItem{Type: BareItemTypeToken, Token: `token`},
+				Parameters: params("key", BareItem{Type: BareItemTypeToken}),
+			},
+		}},
+		wantError: ErrInvalidInnerList,
+	},
+}
+
+func Test_serializeInnerList(t *testing.T) {
+	for _, testCase := range serializeInnerListTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeInnerList([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeInnerList() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeInnerList() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestInnerList_AppendText(t *testing.T) {
+	for _, testCase := range serializeInnerListTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.input.AppendText([]byte("prefix: "))
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("InnerList.AppendText() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("InnerList.AppendText() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 type parseItemTestCase struct {
 	name         string
 	input        string
@@ -1453,6 +2343,15 @@ type parseItemTestCase struct {
 }
 
 var parseItemTestCases []parseItemTestCase
+
+type serializeItemTestCase struct {
+	name      string
+	input     Item
+	want      string
+	wantError error
+}
+
+var serializeItemTestCases []serializeItemTestCase
 
 func init() {
 	bareItemTestCasesByType := map[string][]parseBareItemTestCase{
@@ -1473,7 +2372,8 @@ func init() {
 	}
 
 	inputParameters := `; key1=value1; key2="value2"; key3=%"value3"; key4=:dGVzdA==:; key5=?0; key6=?1; key7=@123456; key8=123; key9=123.456; key1=overridden`
-	wantParameters := params(
+	outputParameters := `;key1=overridden;key2="value2";key3=%"value3";key4=:dGVzdA==:;key5=?0;key6;key7=@123456;key8=123;key9=123.456`
+	parameters := params(
 		"key1", BareItem{Type: BareItemTypeToken, Token: `overridden`},
 		"key2", BareItem{Type: BareItemTypeString, String: `value2`},
 		"key3", BareItem{Type: BareItemTypeDisplayString, DisplayString: `value3`},
@@ -1510,7 +2410,7 @@ func init() {
 					parseItemTestCase{
 						name:         testCase.name + " - with parameters",
 						input:        testCase.input + inputParameters,
-						want:         Item{BareItem: testCase.want, Parameters: wantParameters},
+						want:         Item{BareItem: testCase.want, Parameters: parameters},
 						wantRest:     testCase.wantRest,
 						wantError:    testCase.wantError,
 						skipForParse: testCase.skipForParse,
@@ -1524,6 +2424,45 @@ func init() {
 						skipForParse: true,
 					})
 			}
+		}
+	}
+
+	serializeBareItemTestCasesByType := map[string][]serializeBareItemTestCase{
+		"integer":       serializeBareItemIntegerTestCases,
+		"decimal":       serializeBareItemDecimalTestCases,
+		"string":        serializeBareItemStringTestCases,
+		"token":         serializeBareItemTokenTestCases,
+		"byteSequence":  serializeBareItemByteSequenceTestCases,
+		"boolean":       serializeBareItemBooleanTestCases,
+		"date":          serializeBareItemDateTestCases,
+		"displayString": serializeBareItemDisplayStringTestCases,
+	}
+
+	for type_, typeTestCases := range serializeBareItemTestCasesByType {
+		for _, testCase := range typeTestCases {
+			testCase.name = type_ + " - " + testCase.name
+			serializeBareItemTestCases = append(serializeBareItemTestCases, testCase)
+
+			serializeItemTestCases = append(serializeItemTestCases,
+				serializeItemTestCase{
+					name:      testCase.name,
+					input:     Item{BareItem: testCase.input},
+					want:      testCase.want,
+					wantError: testCase.wantError,
+				},
+				serializeItemTestCase{
+					name:      testCase.name + " - with parameters",
+					input:     Item{BareItem: testCase.input, Parameters: parameters},
+					want:      testCase.want + outputParameters,
+					wantError: testCase.wantError,
+				},
+				serializeItemTestCase{
+					name:      testCase.name + " - with invalid parameters",
+					input:     Item{BareItem: testCase.input, Parameters: params("", BareItem{Type: BareItemTypeToken})},
+					want:      testCase.want + outputParameters,
+					wantError: ErrInvalidItem,
+				},
+			)
 		}
 	}
 }
@@ -1543,6 +2482,50 @@ func Test_parseItem(t *testing.T) {
 
 			if gotRest != testCase.wantRest {
 				t.Errorf("parseItem() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+func Test_serializeItem(t *testing.T) {
+	for _, testCase := range serializeItemTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeItem([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeItem() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeItem() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestItem_AppendText(t *testing.T) {
+	for _, testCase := range serializeItemTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.input.AppendText([]byte("prefix: "))
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("Item.AppendText() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("Item.AppendText() got = %q, want %q", got, want)
 			}
 		})
 	}
@@ -1787,6 +2770,162 @@ var parseListTestCases = []parseListTestCase{
 	},
 }
 
+func Test_parseList(t *testing.T) {
+	for _, testCase := range parseListTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			gotList, gotRest, err := parseList(testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("parseList() error %v, want %v", err, testCase.wantError)
+			}
+
+			if diff := cmp.Diff(testCase.want, gotList, cmpOpts...); diff != "" {
+				t.Errorf("parseList() mismatch (-want, +got):\n%s", diff)
+			}
+
+			if gotRest != testCase.wantRest {
+				t.Errorf("parseList() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+type serializeListTestCase struct {
+	name      string
+	input     List
+	want      string
+	wantError error
+}
+
+var serializeListTestCases = []serializeListTestCase{
+	{
+		name: "empty",
+		want: ``,
+	},
+	{
+		name: "single inner list",
+		input: List{Members: members(
+			InnerList{
+				Members: []Item{
+					{
+						BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+						Parameters: params(
+							"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+							"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+						),
+					},
+				},
+				Parameters: params(
+					"key3", BareItem{Type: BareItemTypeToken, Token: "value3"},
+					"key4", BareItem{Type: BareItemTypeToken, Token: "value4"},
+				),
+			},
+		)},
+		want: `(token;key1=value1;key2=value2);key3=value3;key4=value4`,
+	},
+	{
+		name: "single item",
+		input: List{Members: members(
+			Item{
+				BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+				Parameters: params(
+					"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+					"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+				),
+			},
+		)},
+		want: `token;key1=value1;key2=value2`,
+	},
+	{
+		name: "multiple members",
+		input: List{Members: members(
+			InnerList{
+				Members: []Item{
+					{
+						BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+						Parameters: params(
+							"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+							"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+						),
+					},
+				},
+				Parameters: params(
+					"key3", BareItem{Type: BareItemTypeToken, Token: "value3"},
+					"key4", BareItem{Type: BareItemTypeToken, Token: "value4"},
+				),
+			},
+			Item{
+				BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+				Parameters: params(
+					"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
+					"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+				),
+			},
+		)},
+		want: `(token;key1=value1;key2=value2);key3=value3;key4=value4, token;key1=value1;key2=value2`,
+	},
+	{
+		name: "invalid inner list",
+		input: List{Members: members(
+			InnerList{Members: []Item{
+				{BareItem: BareItem{Type: BareItemTypeToken}},
+			}},
+		)},
+		wantError: ErrInvalidList,
+	},
+	{
+		name: "invalid item",
+		input: List{Members: members(
+			Item{BareItem: BareItem{Type: BareItemTypeToken}},
+		)},
+		wantError: ErrInvalidList,
+	},
+}
+
+func Test_serializeList(t *testing.T) {
+	for _, testCase := range serializeListTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeList([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeList() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("serializeList() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestList_AppendText(t *testing.T) {
+	for _, testCase := range serializeListTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.input.AppendText([]byte("prefix: "))
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("List.AppendText() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			want := "prefix: " + testCase.want
+
+			if string(got) != want {
+				t.Errorf("List.AppendText() got = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 type parseParametersTestCase struct {
 	name      string
 	input     string
@@ -1849,26 +2988,6 @@ var parseParametersTestCases = []parseParametersTestCase{
 	},
 }
 
-func Test_parseList(t *testing.T) {
-	for _, testCase := range parseListTestCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			gotList, gotRest, err := parseList(testCase.input)
-
-			if !errors.Is(err, testCase.wantError) {
-				t.Fatalf("parseList() error %v, want %v", err, testCase.wantError)
-			}
-
-			if diff := cmp.Diff(testCase.want, gotList, cmpOpts...); diff != "" {
-				t.Errorf("parseList() mismatch (-want, +got):\n%s", diff)
-			}
-
-			if gotRest != testCase.wantRest {
-				t.Errorf("parseList() gotRest = %q, want %q", gotRest, testCase.wantRest)
-			}
-		})
-	}
-}
-
 func Test_parseParameters(t *testing.T) {
 	for _, testCase := range parseParametersTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -1884,6 +3003,95 @@ func Test_parseParameters(t *testing.T) {
 
 			if gotRest != testCase.wantRest {
 				t.Errorf("parseParameters() gotRest = %q, want %q", gotRest, testCase.wantRest)
+			}
+		})
+	}
+}
+
+type serializeParametersTestCase struct {
+	name      string
+	input     Parameters
+	want      string
+	wantError error
+}
+
+var serializeParametersTestCases = []serializeParametersTestCase{
+	{
+		name: "empty",
+	},
+	{
+		name:  "single parameter",
+		input: params("key1", BareItem{Type: BareItemTypeToken, Token: `value1`}),
+		want:  `;key1=value1`,
+	},
+	{
+		name: "multiple parameter",
+		input: params(
+			"key1", BareItem{Type: BareItemTypeToken, Token: `value1`},
+			"key2", BareItem{Type: BareItemTypeString, String: `value2`},
+			"key3", BareItem{Type: BareItemTypeDisplayString, DisplayString: `value3`},
+			"key4", BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
+			"key5", BareItem{Type: BareItemTypeBoolean, Boolean: false},
+			"key6", BareItem{Type: BareItemTypeBoolean, Boolean: true},
+			"key7", BareItem{Type: BareItemTypeDate, Date: 123456},
+			"key8", BareItem{Type: BareItemTypeInteger, Integer: 123},
+			"key9", BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+		),
+		want: `;key1=value1;key2="value2";key3=%"value3";key4=:dGVzdA==:;key5=?0;key6;key7=@123456;key8=123;key9=123.456`,
+	},
+	{
+		name:      "invalid key",
+		input:     params("", BareItem{Type: BareItemTypeToken, Token: `value1`}),
+		wantError: ErrInvalidParameters,
+	},
+	{
+		name:      "invalid value",
+		input:     params("key1", BareItem{Type: BareItemTypeToken, Token: ``}),
+		wantError: ErrInvalidParameters,
+	},
+}
+
+func Test_serializeParameters(t *testing.T) {
+	for _, testCase := range serializeParametersTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := serializeParameters([]byte("prefix: "), testCase.input)
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("serializeParameters() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			gotStr := string(got)
+			want := "prefix: " + testCase.want
+
+			if gotStr != want {
+				t.Errorf("serializeParameters() got = %q, want %q", gotStr, want)
+			}
+		})
+	}
+}
+
+func TestParameters_AppendText(t *testing.T) {
+	for _, testCase := range serializeParametersTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.input.AppendText([]byte("prefix: "))
+
+			if !errors.Is(err, testCase.wantError) {
+				t.Fatalf("Parameters.AppendText() error %v, want %v", err, testCase.wantError)
+			}
+
+			if err != nil {
+				return
+			}
+
+			gotStr := string(got)
+			want := "prefix: " + testCase.want
+
+			if gotStr != want {
+				t.Errorf("Parameters.AppendText() got = %q, want %q", gotStr, want)
 			}
 		})
 	}
