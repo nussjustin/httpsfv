@@ -1,4 +1,15 @@
-// Package httpsfv implements parsing of HTTP Structured Field Values as specified in RFC 9651.
+// Package httpsfv implements parsing and serializing of HTTP Structured Field Values as specified in RFC 9651.
+//
+// Headers can be parsed using either [Parse], when exactly one header line is given, or [ParseLines] for zero or more
+// header lines. Both functions take the expected field type (a [Dictionary], [Item] or [List]) as type parameter.
+//
+// Example:
+//
+//	dict, err := httpsfv.ParseLines[httpsfv.Dictionary](req.Header["No-Vary-Search"])
+//
+// Values can be serialized using the AppendText method implements by all types.
+//
+//	text, err := dict.AppendText(nil)
 package httpsfv
 
 import (
