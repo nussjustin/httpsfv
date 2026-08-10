@@ -1368,9 +1368,7 @@ func parseDictionary(inputString string) (v Dictionary, rest string, err error) 
 
 			{
 				// 1. Let value be Boolean true.
-				value := ItemOrInnerListFrom(Item{
-					BareItem: BareItemBoolean(true),
-				})
+				value := ItemOrInnerListFrom(BareItemBoolean(true))
 
 				// 2. Let parameters be the result of running Parsing Parameters (Section 4.2.3.2) with input_string.
 				value.item.Parameters, inputString, err = parseParameters(inputString)
@@ -1673,8 +1671,12 @@ const (
 )
 
 // ItemOrInnerListFrom wraps t in the tagged union ItemOrInnerList.
-func ItemOrInnerListFrom[T InnerList | Item](t T) ItemOrInnerList {
+//
+// A [BareItem] will be wrapped in an [Item] with empty [Item.Parameters].
+func ItemOrInnerListFrom[T BareItem | InnerList | Item](t T) ItemOrInnerList {
 	switch v := any(t).(type) {
+	case BareItem:
+		return ItemOrInnerList{typ: ItemOrInnerListTypeItem, item: Item{BareItem: v}}
 	case InnerList:
 		return ItemOrInnerList{typ: ItemOrInnerListTypeInnerList, innerList: v}
 	case Item:
