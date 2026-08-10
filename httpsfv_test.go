@@ -421,8 +421,8 @@ func TestParseLines(t *testing.T) {
 			},
 			want: List{
 				Members: members(
-					Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "hello"}},
-					Item{BareItem: BareItem{Type: BareItemTypeString, String: "world"}},
+					Item{BareItem: bareItemToken("hello")},
+					Item{BareItem: bareItemString("world")},
 				),
 			},
 		},
@@ -442,10 +442,10 @@ func TestParseLines(t *testing.T) {
 			},
 			want: List{
 				Members: members(
-					Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "hello"}},
-					Item{BareItem: BareItem{Type: BareItemTypeString, String: "world"}},
-					Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "how"}},
-					Item{BareItem: BareItem{Type: BareItemTypeString, String: "are you?"}},
+					Item{BareItem: bareItemToken("hello")},
+					Item{BareItem: bareItemString("world")},
+					Item{BareItem: bareItemToken("how")},
+					Item{BareItem: bareItemString("are you?")},
 				),
 			},
 		},
@@ -706,12 +706,12 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:  "decimal",
 		input: "123.456",
-		want:  BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+		want:  bareItemDecimal(123.456),
 	},
 	{
 		name:  "negative decimal",
 		input: "-123.456",
-		want:  BareItem{Type: BareItemTypeDecimal, Decimal: -123.456},
+		want:  bareItemDecimal(-123.456),
 	},
 	{
 		name:      "decimal with plus sign",
@@ -721,7 +721,7 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:  "decimal with exactly 12 characters before dot",
 		input: "123456789012.34",
-		want:  BareItem{Type: BareItemTypeDecimal, Decimal: 123456789012.34},
+		want:  bareItemDecimal(123456789012.34),
 	},
 	{
 		name:      "decimal with more than 12 characters before dot",
@@ -731,7 +731,7 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:  "decimal with exactly 16 characters",
 		input: "123456789012.345",
-		want:  BareItem{Type: BareItemTypeDecimal, Decimal: 123456789012.345},
+		want:  bareItemDecimal(123456789012.345),
 	},
 	{
 		name:      "decimal with more than 16 characters",
@@ -757,14 +757,14 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:         "trailing spaces after decimal",
 		input:        "123.456   ",
-		want:         BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+		want:         bareItemDecimal(123.456),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "trailing data after decimal",
 		input:        "123.456abc",
-		want:         BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+		want:         bareItemDecimal(123.456),
 		wantRest:     "abc",
 		skipForParse: true,
 	},
@@ -772,12 +772,12 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:  "integer",
 		input: "123456",
-		want:  BareItem{Type: BareItemTypeInteger, Integer: 123_456},
+		want:  bareItemInteger(123_456),
 	},
 	{
 		name:  "negative integer",
 		input: "-123456",
-		want:  BareItem{Type: BareItemTypeInteger, Integer: -123_456},
+		want:  bareItemInteger(-123_456),
 	},
 	{
 		name:      "integer with plus sign",
@@ -787,7 +787,7 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:  "integer with exactly 15 characters",
 		input: "123456789012345",
-		want:  BareItem{Type: BareItemTypeInteger, Integer: 123_456_789_012_345},
+		want:  bareItemInteger(123_456_789_012_345),
 	},
 	{
 		name:      "integer with more than 15 characters",
@@ -802,14 +802,14 @@ var parseBareItemIntegerOrDecimalTestCases = []parseBareItemTestCase{
 	{
 		name:         "trailing spaces after integer",
 		input:        "123   ",
-		want:         BareItem{Type: BareItemTypeInteger, Integer: 123},
+		want:         bareItemInteger(123),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "trailing data after integer",
 		input:        "123abc",
-		want:         BareItem{Type: BareItemTypeInteger, Integer: 123},
+		want:         bareItemInteger(123),
 		wantRest:     "abc",
 		skipForParse: true,
 	},
@@ -848,37 +848,37 @@ func Test_parseBareItemIntegerOrDecimal(t *testing.T) {
 var serializeBareItemIntegerTestCases = []serializeBareItemTestCase{
 	{
 		name:  "zero",
-		input: BareItem{Type: BareItemTypeInteger, Integer: 0},
+		input: bareItemInteger(0),
 		want:  "0",
 	},
 	{
 		name:  "positive",
-		input: BareItem{Type: BareItemTypeInteger, Integer: 123_456},
+		input: bareItemInteger(123_456),
 		want:  "123456",
 	},
 	{
 		name:  "negative",
-		input: BareItem{Type: BareItemTypeInteger, Integer: -123_456},
+		input: bareItemInteger(-123_456),
 		want:  "-123456",
 	},
 	{
 		name:  "positive at range end",
-		input: BareItem{Type: BareItemTypeInteger, Integer: 999_999_999_999_999},
+		input: bareItemInteger(999_999_999_999_999),
 		want:  "999999999999999",
 	},
 	{
 		name:  "negative at range end",
-		input: BareItem{Type: BareItemTypeInteger, Integer: -999_999_999_999_999},
+		input: bareItemInteger(-999_999_999_999_999),
 		want:  "-999999999999999",
 	},
 	{
 		name:      "positive outside range",
-		input:     BareItem{Type: BareItemTypeInteger, Integer: 999_999_999_999_999 + 1},
+		input:     bareItemInteger(999_999_999_999_999 + 1),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 	{
 		name:      "negative outside range",
-		input:     BareItem{Type: BareItemTypeInteger, Integer: -999_999_999_999_999 - 1},
+		input:     bareItemInteger(-999_999_999_999_999 - 1),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 }
@@ -908,82 +908,82 @@ func Test_serializeBareItemInteger(t *testing.T) {
 var serializeBareItemDecimalTestCases = []serializeBareItemTestCase{
 	{
 		name:  "zero",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: 0},
+		input: bareItemDecimal(0),
 		want:  "0.0",
 	},
 	{
 		name:      "NaN",
-		input:     BareItem{Type: BareItemTypeDecimal, Decimal: math.NaN()},
+		input:     bareItemDecimal(math.NaN()),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 	{
 		name:      "+Inf",
-		input:     BareItem{Type: BareItemTypeDecimal, Decimal: math.Inf(0)},
+		input:     bareItemDecimal(math.Inf(0)),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 	{
 		name:      "-Inf",
-		input:     BareItem{Type: BareItemTypeDecimal, Decimal: math.Inf(1)},
+		input:     bareItemDecimal(math.Inf(1)),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 	{
 		name:  "positive",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.0},
+		input: bareItemDecimal(123_456.0),
 		want:  "123456.0",
 	},
 	{
 		name:  "negative",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.0},
+		input: bareItemDecimal(-123_456.0),
 		want:  "-123456.0",
 	},
 	{
 		name:  "positive with full precision",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.789},
+		input: bareItemDecimal(123_456.789),
 		want:  "123456.789",
 	},
 	{
 		name:  "negative with full precision",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.789},
+		input: bareItemDecimal(-123_456.789),
 		want:  "-123456.789",
 	},
 	{
 		name:  "positive rounded up",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.7895},
+		input: bareItemDecimal(123_456.7895),
 		want:  "123456.79",
 	},
 	{
 		name:  "negative rounded up",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.7895},
+		input: bareItemDecimal(-123_456.7895),
 		want:  "-123456.79",
 	},
 	{
 		name:  "positive rounded down",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: 123_456.7894},
+		input: bareItemDecimal(123_456.7894),
 		want:  "123456.789",
 	},
 	{
 		name:  "negative rounded down",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: -123_456.7894},
+		input: bareItemDecimal(-123_456.7894),
 		want:  "-123456.789",
 	},
 	{
 		name:  "positive at range end",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: 999_999_999_999.0},
+		input: bareItemDecimal(999_999_999_999.0),
 		want:  "999999999999.0",
 	},
 	{
 		name:  "negative at range end",
-		input: BareItem{Type: BareItemTypeDecimal, Decimal: -999_999_999_999.0},
+		input: bareItemDecimal(-999_999_999_999.0),
 		want:  "-999999999999.0",
 	},
 	{
 		name:      "positive outside range",
-		input:     BareItem{Type: BareItemTypeDecimal, Decimal: 999_999_999_999 + 1},
+		input:     bareItemDecimal(999_999_999_999 + 1),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 	{
 		name:      "negative outside range",
-		input:     BareItem{Type: BareItemTypeDecimal, Decimal: -999_999_999_999 - 1},
+		input:     bareItemDecimal(-999_999_999_999 - 1),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 }
@@ -1019,17 +1019,17 @@ var parseBareItemStringTestCases = []parseBareItemTestCase{
 	{
 		name:  "empty",
 		input: `""`,
-		want:  BareItem{Type: BareItemTypeString, String: ``},
+		want:  bareItemString(``),
 	},
 	{
 		name:  "simple",
 		input: `"hello world"`,
-		want:  BareItem{Type: BareItemTypeString, String: `hello world`},
+		want:  bareItemString(`hello world`),
 	},
 	{
 		name:  "with escaped characters",
 		input: `"with \" and \\"`,
-		want:  BareItem{Type: BareItemTypeString, String: `with " and \`},
+		want:  bareItemString(`with " and \`),
 	},
 	{
 		name:      "with invalid escape",
@@ -1060,14 +1060,14 @@ var parseBareItemStringTestCases = []parseBareItemTestCase{
 	{
 		name:         "with trailing spaces",
 		input:        `"hello world"   `,
-		want:         BareItem{Type: BareItemTypeString, String: `hello world`},
+		want:         bareItemString(`hello world`),
 		wantRest:     `   `,
 		skipForParse: true,
 	},
 	{
 		name:         "with trailing data",
 		input:        `"hello world"abc`,
-		want:         BareItem{Type: BareItemTypeString, String: `hello world`},
+		want:         bareItemString(`hello world`),
 		wantRest:     `abc`,
 		skipForParse: true,
 	},
@@ -1096,32 +1096,32 @@ func Test_parseBareItemString(t *testing.T) {
 var serializeBareItemStringTestCases = []serializeBareItemTestCase{
 	{
 		name:  "empty",
-		input: BareItem{Type: BareItemTypeString, String: ``},
+		input: bareItemString(``),
 		want:  `""`,
 	},
 	{
 		name:  "simple",
-		input: BareItem{Type: BareItemTypeString, String: `hello world`},
+		input: bareItemString(`hello world`),
 		want:  `"hello world"`,
 	},
 	{
 		name:  "with backslashes",
-		input: BareItem{Type: BareItemTypeString, String: `\a \ will be escaped\`},
+		input: bareItemString(`\a \ will be escaped\`),
 		want:  `"\\a \\ will be escaped\\"`,
 	},
 	{
 		name:  "with quotes",
-		input: BareItem{Type: BareItemTypeString, String: `"hello "awesome" world"`},
+		input: bareItemString(`"hello "awesome" world"`),
 		want:  `"\"hello \"awesome\" world\""`,
 	},
 	{
 		name:  "with backslashes and quotes",
-		input: BareItem{Type: BareItemTypeString, String: `with \ and "`},
+		input: bareItemString(`with \ and "`),
 		want:  `"with \\ and \""`,
 	},
 	{
 		name:      "non-ascii",
-		input:     BareItem{Type: BareItemTypeString, String: "\u26a1"},
+		input:     bareItemString("\u26a1"),
 		wantError: ErrInvalidString,
 	},
 }
@@ -1157,27 +1157,27 @@ var parseBareItemTokenTestCases = []parseBareItemTestCase{
 	{
 		name:  "simple",
 		input: "hello",
-		want:  BareItem{Type: BareItemTypeToken, Token: "hello"},
+		want:  bareItemToken("hello"),
 	},
 	{
 		name:  "starting with upper case character",
 		input: "Hello",
-		want:  BareItem{Type: BareItemTypeToken, Token: "Hello"},
+		want:  bareItemToken("Hello"),
 	},
 	{
 		name:  "starting with *",
 		input: "*hello",
-		want:  BareItem{Type: BareItemTypeToken, Token: "*hello"},
+		want:  bareItemToken("*hello"),
 	},
 	{
 		name:  "with complex characters",
 		input: "h!#$%&'+-.^_`|~:/",
-		want:  BareItem{Type: BareItemTypeToken, Token: "h!#$%&'+-.^_`|~:/"},
+		want:  bareItemToken("h!#$%&'+-.^_`|~:/"),
 	},
 	{
 		name:  "with invalid first character",
 		input: "h!#$%&'+-.^_`|~:/",
-		want:  BareItem{Type: BareItemTypeToken, Token: "h!#$%&'+-.^_`|~:/"},
+		want:  bareItemToken("h!#$%&'+-.^_`|~:/"),
 	},
 	{
 		name:      "quoted",
@@ -1193,14 +1193,14 @@ var parseBareItemTokenTestCases = []parseBareItemTestCase{
 	{
 		name:         "with trailing spaces",
 		input:        "hello   ",
-		want:         BareItem{Type: BareItemTypeToken, Token: "hello"},
+		want:         bareItemToken("hello"),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "with trailing data",
 		input:        "hello(x)",
-		want:         BareItem{Type: BareItemTypeToken, Token: "hello"},
+		want:         bareItemToken("hello"),
 		wantRest:     "(x)",
 		skipForParse: true,
 	},
@@ -1229,51 +1229,51 @@ func Test_parseBareItemToken(t *testing.T) {
 var serializeBareItemTokenTestCases = []serializeBareItemTestCase{
 	{
 		name:  "simple lower case",
-		input: BareItem{Type: BareItemTypeToken, Token: `hello`},
+		input: bareItemToken(`hello`),
 		want:  `hello`,
 	},
 	{
 		name:  "simple upper case",
-		input: BareItem{Type: BareItemTypeToken, Token: `HELLO`},
+		input: bareItemToken(`HELLO`),
 		want:  `HELLO`,
 	},
 	{
 		name:  "simple mixed case",
-		input: BareItem{Type: BareItemTypeToken, Token: `HeLlO`},
+		input: bareItemToken(`HeLlO`),
 		want:  `HeLlO`,
 	},
 	{
 		name:  "star",
-		input: BareItem{Type: BareItemTypeToken, Token: `*`},
+		input: bareItemToken(`*`),
 		want:  `*`,
 	},
 	{
 		name:  "star followed by more",
-		input: BareItem{Type: BareItemTypeToken, Token: `*hello*`},
+		input: bareItemToken(`*hello*`),
 		want:  `*hello*`,
 	},
 	{
 		name:  "complex",
-		input: BareItem{Type: BareItemTypeToken, Token: `*hello:complex/token*`},
+		input: bareItemToken(`*hello:complex/token*`),
 		want:  `*hello:complex/token*`,
 	},
 	{
 		name:      "empty",
-		input:     BareItem{Type: BareItemTypeToken, Token: ``},
+		input:     bareItemToken(``),
 		wantError: ErrInvalidToken,
 	},
 	{
 		name:      "invalid start",
-		input:     BareItem{Type: BareItemTypeToken, Token: `\`},
+		input:     bareItemToken(`\`),
 		wantError: ErrInvalidToken,
 	}, {
 		name:      "invalid characters",
-		input:     BareItem{Type: BareItemTypeToken, Token: `a b`},
+		input:     bareItemToken(`a b`),
 		wantError: ErrInvalidToken,
 	},
 	{
 		name:      "non-ascii",
-		input:     BareItem{Type: BareItemTypeToken, Token: "\u26a1"},
+		input:     bareItemToken("\u26a1"),
 		wantError: ErrInvalidToken,
 	},
 }
@@ -1309,7 +1309,7 @@ var parseBareItemByteSequenceTestCases = []parseBareItemTestCase{
 	{
 		name:  "valid",
 		input: ":dGVzdA==:",
-		want:  BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
+		want:  bareItemByteSequence([]byte("test")),
 	},
 	{
 		name:      "without prefix",
@@ -1334,12 +1334,12 @@ var parseBareItemByteSequenceTestCases = []parseBareItemTestCase{
 	{
 		name:  "without padding",
 		input: ":dGVzdA:",
-		want:  BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
+		want:  bareItemByteSequence([]byte("test")),
 	},
 	{
 		name:  "without data",
 		input: "::",
-		want:  BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte{}},
+		want:  bareItemByteSequence([]byte{}),
 	},
 	{
 		name:      "with invalid characters",
@@ -1360,14 +1360,14 @@ var parseBareItemByteSequenceTestCases = []parseBareItemTestCase{
 	{
 		name:         "with trailing spaces",
 		input:        ":dGVzdA==:   ",
-		want:         BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
+		want:         bareItemByteSequence([]byte("test")),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "with trailing data",
 		input:        ":dGVzdA==::x:",
-		want:         BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
+		want:         bareItemByteSequence([]byte("test")),
 		wantRest:     ":x:",
 		skipForParse: true,
 	},
@@ -1396,17 +1396,17 @@ func Test_parseBareItemByteSequence(t *testing.T) {
 var serializeBareItemByteSequenceTestCases = []serializeBareItemTestCase{
 	{
 		name:  "empty",
-		input: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte(``)},
+		input: bareItemByteSequence([]byte(``)),
 		want:  `::`,
 	},
 	{
 		name:  "non-empty",
-		input: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte(`hello world`)},
+		input: bareItemByteSequence([]byte(`hello world`)),
 		want:  `:aGVsbG8gd29ybGQ=:`,
 	},
 	{
 		name:  "unicode",
-		input: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte(`hällo wörld`)},
+		input: bareItemByteSequence([]byte(`hällo wörld`)),
 		want:  `:aMOkbGxvIHfDtnJsZA==:`,
 	},
 }
@@ -1442,12 +1442,12 @@ var parseBareItemBooleanTestCases = []parseBareItemTestCase{
 	{
 		name:  "boolean true",
 		input: "?1",
-		want:  BareItem{Type: BareItemTypeBoolean, Boolean: true},
+		want:  bareItemBoolean(true),
 	},
 	{
 		name:  "boolean false",
 		input: "?0",
-		want:  BareItem{Type: BareItemTypeBoolean, Boolean: false},
+		want:  bareItemBoolean(false),
 	},
 	{
 		name:      "without prefix",
@@ -1473,14 +1473,14 @@ var parseBareItemBooleanTestCases = []parseBareItemTestCase{
 	{
 		name:         "with trailing spaces",
 		input:        "?0   ",
-		want:         BareItem{Type: BareItemTypeBoolean, Boolean: false},
+		want:         bareItemBoolean(false),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "with trailing data",
 		input:        "?01234",
-		want:         BareItem{Type: BareItemTypeBoolean, Boolean: false},
+		want:         bareItemBoolean(false),
 		wantRest:     "1234",
 		skipForParse: true,
 	},
@@ -1509,12 +1509,12 @@ func Test_parseBareItemBoolean(t *testing.T) {
 var serializeBareItemBooleanTestCases = []serializeBareItemTestCase{
 	{
 		name:  "false",
-		input: BareItem{Type: BareItemTypeBoolean, Boolean: false},
+		input: bareItemBoolean(false),
 		want:  `?0`,
 	},
 	{
 		name:  "true",
-		input: BareItem{Type: BareItemTypeBoolean, Boolean: true},
+		input: bareItemBoolean(true),
 		want:  `?1`,
 	},
 }
@@ -1550,12 +1550,12 @@ var parseBareItemDateTestCases = []parseBareItemTestCase{
 	{
 		name:  "positive",
 		input: "@123456",
-		want:  BareItem{Type: BareItemTypeDate, Date: 123456},
+		want:  bareItemDate(123456),
 	},
 	{
 		name:  "negative date",
 		input: "@-123456",
-		want:  BareItem{Type: BareItemTypeDate, Date: -123456},
+		want:  bareItemDate(-123456),
 	},
 	{
 		name:      "without prefix",
@@ -1596,14 +1596,14 @@ var parseBareItemDateTestCases = []parseBareItemTestCase{
 	{
 		name:         "with trailing spaces",
 		input:        "@123456   ",
-		want:         BareItem{Type: BareItemTypeDate, Date: 123456},
+		want:         bareItemDate(123456),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "with trailing data",
 		input:        "@123456abc",
-		want:         BareItem{Type: BareItemTypeDate, Date: 123456},
+		want:         bareItemDate(123456),
 		wantRest:     "abc",
 		skipForParse: true,
 	},
@@ -1632,37 +1632,37 @@ func Test_parseBareItemDate(t *testing.T) {
 var serializeBareItemDateTestCases = []serializeBareItemTestCase{
 	{
 		name:  "zero",
-		input: BareItem{Type: BareItemTypeDate, Date: 0},
+		input: bareItemDate(0),
 		want:  "@0",
 	},
 	{
 		name:  "positive",
-		input: BareItem{Type: BareItemTypeDate, Date: 123_456},
+		input: bareItemDate(123_456),
 		want:  "@123456",
 	},
 	{
 		name:  "negative",
-		input: BareItem{Type: BareItemTypeDate, Date: -123_456},
+		input: bareItemDate(-123_456),
 		want:  "@-123456",
 	},
 	{
 		name:  "positive at range end",
-		input: BareItem{Type: BareItemTypeDate, Date: 999_999_999_999_999},
+		input: bareItemDate(999_999_999_999_999),
 		want:  "@999999999999999",
 	},
 	{
 		name:  "negative at range end",
-		input: BareItem{Type: BareItemTypeDate, Date: -999_999_999_999_999},
+		input: bareItemDate(-999_999_999_999_999),
 		want:  "@-999999999999999",
 	},
 	{
 		name:      "positive outside range",
-		input:     BareItem{Type: BareItemTypeDate, Date: 999_999_999_999_999 + 1},
+		input:     bareItemDate(999_999_999_999_999 + 1),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 	{
 		name:      "negative outside range",
-		input:     BareItem{Type: BareItemTypeDate, Date: -999_999_999_999_999 - 1},
+		input:     bareItemDate(-999_999_999_999_999 - 1),
 		wantError: ErrInvalidIntegerOrDecimal,
 	},
 }
@@ -1698,12 +1698,12 @@ var parseBareItemDisplayStringTestCases = []parseBareItemTestCase{
 	{
 		name:  "valid",
 		input: `%"hello world"`,
-		want:  BareItem{Type: BareItemTypeDisplayString, DisplayString: `hello world`},
+		want:  bareItemDisplayString(`hello world`),
 	},
 	{
 		name:  "with hex",
 		input: `%"%c3%bcsers"`,
-		want:  BareItem{Type: BareItemTypeDisplayString, DisplayString: `üsers`},
+		want:  bareItemDisplayString(`üsers`),
 	},
 	{
 		name:      "with missing starting quote",
@@ -1749,14 +1749,14 @@ var parseBareItemDisplayStringTestCases = []parseBareItemTestCase{
 	{
 		name:         "with trailing spaces",
 		input:        `%"hello world"   `,
-		want:         BareItem{Type: BareItemTypeDisplayString, DisplayString: `hello world`},
+		want:         bareItemDisplayString(`hello world`),
 		wantRest:     "   ",
 		skipForParse: true,
 	},
 	{
 		name:         "with trailing data",
 		input:        `%"hello world"%"test"`,
-		want:         BareItem{Type: BareItemTypeDisplayString, DisplayString: `hello world`},
+		want:         bareItemDisplayString(`hello world`),
 		wantRest:     `%"test"`,
 		skipForParse: true,
 	},
@@ -1785,42 +1785,42 @@ func Test_parseBareItemDisplayString(t *testing.T) {
 var serializeBareItemDisplayStringTestCases = []serializeBareItemTestCase{
 	{
 		name:  "empty",
-		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: ``},
+		input: bareItemDisplayString(``),
 		want:  `%""`,
 	},
 	{
 		name:  "simple",
-		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `hello world`},
+		input: bareItemDisplayString(`hello world`),
 		want:  `%"hello world"`,
 	},
 	{
 		name:  "unicode",
-		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `üsers`},
+		input: bareItemDisplayString(`üsers`),
 		want:  `%"%c3%bcsers"`,
 	},
 	{
 		name:  "with backslashes",
-		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `unescaped \`},
+		input: bareItemDisplayString(`unescaped \`),
 		want:  `%"unescaped \"`,
 	},
 	{
 		name:  "with percent sign",
-		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `escaped %`},
+		input: bareItemDisplayString(`escaped %`),
 		want:  `%"escaped %25"`,
 	},
 	{
 		name:  "with quotes",
-		input: BareItem{Type: BareItemTypeDisplayString, DisplayString: `escaped "`},
+		input: bareItemDisplayString(`escaped "`),
 		want:  `%"escaped %22"`,
 	},
 	{
 		name:      "invalid unicode",
-		input:     BareItem{Type: BareItemTypeDisplayString, DisplayString: string([]byte{0b10000000})},
+		input:     bareItemDisplayString(string([]byte{0b10000000})),
 		wantError: ErrInvalidDisplayString,
 	},
 	{
 		name:      "invalid utf-8",
-		input:     BareItem{Type: BareItemTypeDisplayString, DisplayString: string([]byte{0xdf, 0xff})},
+		input:     bareItemDisplayString(string([]byte{0xdf, 0xff})),
 		wantError: ErrInvalidDisplayString,
 	},
 }
@@ -1865,34 +1865,34 @@ var parseDictionaryTestCases = []parseDictionaryTestCase{
 		name:  "dictionary of items",
 		input: `a=123 , b=123.456, c=?0 , d=?1 , e=@123456 , f=token, g="string" ` + "\t" + `,` + "\t" + ` h=%"display string" `,
 		want: dict(
-			"a", Item{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-			"b", Item{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
-			"c", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-			"d", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
-			"e", Item{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-			"f", Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
-			"g", Item{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-			"h", Item{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+			"a", Item{BareItem: bareItemInteger(123)},
+			"b", Item{BareItem: bareItemDecimal(123.456)},
+			"c", Item{BareItem: bareItemBoolean(false)},
+			"d", Item{BareItem: bareItemBoolean(true)},
+			"e", Item{BareItem: bareItemDate(123456)},
+			"f", Item{BareItem: bareItemToken("token")},
+			"g", Item{BareItem: bareItemString("string")},
+			"h", Item{BareItem: bareItemDisplayString("display string")},
 		),
 	},
 	{
 		name:  "mixed dictionary",
 		input: `a=123,b=123.456,c=(?0 ?1),d=@123456,e=token,f=("string" %"display string")`,
 		want: dict(
-			"a", Item{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-			"b", Item{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+			"a", Item{BareItem: bareItemInteger(123)},
+			"b", Item{BareItem: bareItemDecimal(123.456)},
 			"c", InnerList{
 				Members: []Item{
-					{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-					{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+					{BareItem: bareItemBoolean(false)},
+					{BareItem: bareItemBoolean(true)},
 				},
 			},
-			"d", Item{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-			"e", Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+			"d", Item{BareItem: bareItemDate(123456)},
+			"e", Item{BareItem: bareItemToken("token")},
 			"f", InnerList{
 				Members: []Item{
-					{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-					{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+					{BareItem: bareItemString("string")},
+					{BareItem: bareItemDisplayString("display string")},
 				},
 			},
 		),
@@ -1901,7 +1901,7 @@ var parseDictionaryTestCases = []parseDictionaryTestCase{
 		name:  "boolean without value",
 		input: `a`,
 		want: dict(
-			"a", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+			"a", Item{BareItem: bareItemBoolean(true)},
 		),
 	},
 	{
@@ -1909,10 +1909,10 @@ var parseDictionaryTestCases = []parseDictionaryTestCase{
 		input: `a; param1=value1;param2=value2; param1=value3`,
 		want: dict(
 			"a", Item{
-				BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true},
+				BareItem: bareItemBoolean(true),
 				Parameters: params(
-					"param1", BareItem{Type: BareItemTypeToken, Token: "value3"},
-					"param2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+					"param1", bareItemToken("value3"),
+					"param2", bareItemToken("value2"),
 				),
 			},
 		),
@@ -1981,10 +1981,10 @@ var serializeDictionaryTestCases = []serializeDictionaryTestCase{
 		input: dict(
 			"key1", InnerList{Members: []Item{
 				{
-					BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+					BareItem: bareItemToken(`token`),
 					Parameters: params(
-						"param1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-						"param2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+						"param1", bareItemToken("value1"),
+						"param2", bareItemToken("value2"),
 					),
 				},
 			}},
@@ -1995,10 +1995,10 @@ var serializeDictionaryTestCases = []serializeDictionaryTestCase{
 		name: "single item",
 		input: dict(
 			"key1", Item{
-				BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+				BareItem: bareItemToken(`token`),
 				Parameters: params(
-					"param1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-					"param2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+					"param1", bareItemToken("value1"),
+					"param2", bareItemToken("value2"),
 				),
 			},
 		),
@@ -2007,34 +2007,34 @@ var serializeDictionaryTestCases = []serializeDictionaryTestCase{
 	{
 		name: "boolean false",
 		input: dict(
-			"key1", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
+			"key1", Item{BareItem: bareItemBoolean(false)},
 		),
 		want: `key1=?0`,
 	},
 	{
 		name: "boolean true",
 		input: dict(
-			"key1", Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+			"key1", Item{BareItem: bareItemBoolean(true)},
 		),
 		want: `key1`,
 	},
 	{
 		name: "mixed dictionary",
 		input: dict(
-			"a", Item{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-			"b", Item{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+			"a", Item{BareItem: bareItemInteger(123)},
+			"b", Item{BareItem: bareItemDecimal(123.456)},
 			"c", InnerList{
 				Members: []Item{
-					{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-					{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+					{BareItem: bareItemBoolean(false)},
+					{BareItem: bareItemBoolean(true)},
 				},
 			},
-			"d", Item{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-			"e", Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+			"d", Item{BareItem: bareItemDate(123456)},
+			"e", Item{BareItem: bareItemToken("token")},
 			"f", InnerList{
 				Members: []Item{
-					{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-					{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+					{BareItem: bareItemString("string")},
+					{BareItem: bareItemDisplayString("display string")},
 				},
 			},
 		),
@@ -2043,7 +2043,7 @@ var serializeDictionaryTestCases = []serializeDictionaryTestCase{
 	{
 		name: "invalid key",
 		input: dict(
-			"", Item{BareItem: BareItem{Type: BareItemTypeToken, Token: `token`}},
+			"", Item{BareItem: bareItemToken(`token`)},
 		),
 		wantError: ErrInvalidDictionary,
 	},
@@ -2051,7 +2051,7 @@ var serializeDictionaryTestCases = []serializeDictionaryTestCase{
 		name: "invalid inner list",
 		input: dict(
 			"key1", InnerList{Members: []Item{
-				{BareItem: BareItem{Type: BareItemTypeToken}},
+				{BareItem: bareItemToken("")},
 			}},
 		),
 		wantError: ErrInvalidDictionary,
@@ -2059,7 +2059,7 @@ var serializeDictionaryTestCases = []serializeDictionaryTestCase{
 	{
 		name: "invalid item",
 		input: dict(
-			"key1", Item{BareItem: BareItem{Type: BareItemTypeToken}},
+			"key1", Item{BareItem: bareItemToken("")},
 		),
 		wantError: ErrInvalidDictionary,
 	},
@@ -2135,15 +2135,15 @@ var parseInnerListTestCases = []parseInnerListTestCase{
 		input: `( 123 123.456 ?0 ?1 @123456 token "string" %"display string" :dGVzdA==: )`,
 		want: InnerList{
 			Members: []Item{
-				{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-				{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
-				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
-				{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-				{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
-				{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-				{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
-				{BareItem: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")}},
+				{BareItem: bareItemInteger(123)},
+				{BareItem: bareItemDecimal(123.456)},
+				{BareItem: bareItemBoolean(false)},
+				{BareItem: bareItemBoolean(true)},
+				{BareItem: bareItemDate(123456)},
+				{BareItem: bareItemToken("token")},
+				{BareItem: bareItemString("string")},
+				{BareItem: bareItemDisplayString("display string")},
+				{BareItem: bareItemByteSequence([]byte("test"))},
 			},
 		},
 	},
@@ -2153,40 +2153,40 @@ var parseInnerListTestCases = []parseInnerListTestCase{
 		want: InnerList{
 			Members: []Item{
 				{
-					BareItem:   BareItem{Type: BareItemTypeInteger, Integer: 123},
-					Parameters: params("a", BareItem{Type: BareItemTypeInteger, Integer: 1}),
+					BareItem:   bareItemInteger(123),
+					Parameters: params("a", bareItemInteger(1)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
-					Parameters: params("b", BareItem{Type: BareItemTypeInteger, Integer: 2}),
+					BareItem:   bareItemDecimal(123.456),
+					Parameters: params("b", bareItemInteger(2)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeBoolean, Boolean: false},
-					Parameters: params("c", BareItem{Type: BareItemTypeInteger, Integer: 3}),
+					BareItem:   bareItemBoolean(false),
+					Parameters: params("c", bareItemInteger(3)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeBoolean, Boolean: true},
-					Parameters: params("d", BareItem{Type: BareItemTypeInteger, Integer: 4}),
+					BareItem:   bareItemBoolean(true),
+					Parameters: params("d", bareItemInteger(4)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeDate, Date: 123456},
-					Parameters: params("e", BareItem{Type: BareItemTypeInteger, Integer: 5}),
+					BareItem:   bareItemDate(123456),
+					Parameters: params("e", bareItemInteger(5)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeToken, Token: "token"},
-					Parameters: params("f", BareItem{Type: BareItemTypeInteger, Integer: 6}),
+					BareItem:   bareItemToken("token"),
+					Parameters: params("f", bareItemInteger(6)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeString, String: "string"},
-					Parameters: params("g", BareItem{Type: BareItemTypeInteger, Integer: 7}),
+					BareItem:   bareItemString("string"),
+					Parameters: params("g", bareItemInteger(7)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"},
-					Parameters: params("h", BareItem{Type: BareItemTypeInteger, Integer: 8}),
+					BareItem:   bareItemDisplayString("display string"),
+					Parameters: params("h", bareItemInteger(8)),
 				},
 				{
-					BareItem:   BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
-					Parameters: params("i", BareItem{Type: BareItemTypeInteger, Integer: 9}),
+					BareItem:   bareItemByteSequence([]byte("test")),
+					Parameters: params("i", bareItemInteger(9)),
 				},
 			},
 		},
@@ -2228,7 +2228,7 @@ var serializeInnerListTestCases = []serializeInnerListTestCase{
 	{
 		name: "single member",
 		input: InnerList{Members: []Item{
-			{BareItem: BareItem{Type: BareItemTypeToken, Token: `token`}},
+			{BareItem: bareItemToken(`token`)},
 		}},
 		want: `(token)`,
 	},
@@ -2236,15 +2236,15 @@ var serializeInnerListTestCases = []serializeInnerListTestCase{
 		name: "multiple members",
 		input: InnerList{
 			Members: []Item{
-				{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-				{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
-				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
-				{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-				{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
-				{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-				{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
-				{BareItem: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")}},
+				{BareItem: bareItemInteger(123)},
+				{BareItem: bareItemDecimal(123.456)},
+				{BareItem: bareItemBoolean(false)},
+				{BareItem: bareItemBoolean(true)},
+				{BareItem: bareItemDate(123456)},
+				{BareItem: bareItemToken("token")},
+				{BareItem: bareItemString("string")},
+				{BareItem: bareItemDisplayString("display string")},
+				{BareItem: bareItemByteSequence([]byte("test"))},
 			},
 		},
 		want: `(123 123.456 ?0 ?1 @123456 token "string" %"display string" :dGVzdA==:)`,
@@ -2253,19 +2253,19 @@ var serializeInnerListTestCases = []serializeInnerListTestCase{
 		name: "with parameters",
 		input: InnerList{
 			Members: []Item{
-				{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-				{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
-				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-				{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
-				{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-				{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
-				{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-				{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
-				{BareItem: BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")}},
+				{BareItem: bareItemInteger(123)},
+				{BareItem: bareItemDecimal(123.456)},
+				{BareItem: bareItemBoolean(false)},
+				{BareItem: bareItemBoolean(true)},
+				{BareItem: bareItemDate(123456)},
+				{BareItem: bareItemToken("token")},
+				{BareItem: bareItemString("string")},
+				{BareItem: bareItemDisplayString("display string")},
+				{BareItem: bareItemByteSequence([]byte("test"))},
 			},
 			Parameters: params(
-				"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-				"key2", BareItem{Type: BareItemTypeString, String: "value2"},
+				"key1", bareItemToken("value1"),
+				"key2", bareItemString("value2"),
 			),
 		},
 		want: `(123 123.456 ?0 ?1 @123456 token "string" %"display string" :dGVzdA==:);key1=value1;key2="value2"`,
@@ -2273,7 +2273,7 @@ var serializeInnerListTestCases = []serializeInnerListTestCase{
 	{
 		name: "invalid value",
 		input: InnerList{Members: []Item{
-			{BareItem: BareItem{Type: BareItemTypeToken, Token: ``}},
+			{BareItem: bareItemToken(``)},
 		}},
 		wantError: ErrInvalidInnerList,
 	},
@@ -2281,8 +2281,8 @@ var serializeInnerListTestCases = []serializeInnerListTestCase{
 		name: "invalid parameters",
 		input: InnerList{Members: []Item{
 			{
-				BareItem:   BareItem{Type: BareItemTypeToken, Token: `token`},
-				Parameters: params("key", BareItem{Type: BareItemTypeToken}),
+				BareItem:   bareItemToken(`token`),
+				Parameters: params("key", bareItemToken("")),
 			},
 		}},
 		wantError: ErrInvalidInnerList,
@@ -2374,15 +2374,15 @@ func init() {
 	inputParameters := `; key1=value1; key2="value2"; key3=%"value3"; key4=:dGVzdA==:; key5=?0; key6=?1; key7=@123456; key8=123; key9=123.456; key1=overridden`
 	outputParameters := `;key1=overridden;key2="value2";key3=%"value3";key4=:dGVzdA==:;key5=?0;key6;key7=@123456;key8=123;key9=123.456`
 	parameters := params(
-		"key1", BareItem{Type: BareItemTypeToken, Token: `overridden`},
-		"key2", BareItem{Type: BareItemTypeString, String: `value2`},
-		"key3", BareItem{Type: BareItemTypeDisplayString, DisplayString: `value3`},
-		"key4", BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
-		"key5", BareItem{Type: BareItemTypeBoolean, Boolean: false},
-		"key6", BareItem{Type: BareItemTypeBoolean, Boolean: true},
-		"key7", BareItem{Type: BareItemTypeDate, Date: 123456},
-		"key8", BareItem{Type: BareItemTypeInteger, Integer: 123},
-		"key9", BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+		"key1", bareItemToken(`overridden`),
+		"key2", bareItemString(`value2`),
+		"key3", bareItemDisplayString(`value3`),
+		"key4", bareItemByteSequence([]byte("test")),
+		"key5", bareItemBoolean(false),
+		"key6", bareItemBoolean(true),
+		"key7", bareItemDate(123456),
+		"key8", bareItemInteger(123),
+		"key9", bareItemDecimal(123.456),
 	)
 
 	for type_, typeTestCases := range bareItemTestCasesByType {
@@ -2458,7 +2458,7 @@ func init() {
 				},
 				serializeItemTestCase{
 					name:      testCase.name + " - with invalid parameters",
-					input:     Item{BareItem: testCase.input, Parameters: params("", BareItem{Type: BareItemTypeToken})},
+					input:     Item{BareItem: testCase.input, Parameters: params("", bareItemToken(""))},
 					want:      testCase.want + outputParameters,
 					wantError: ErrInvalidItem,
 				},
@@ -2615,14 +2615,14 @@ var parseListTestCases = []parseListTestCase{
 		input: `123 , 123.456 , ?0 , ?1 , @123456 , token , "string" ` + "\t" + `,` + "\t" + ` %"display string"`,
 		want: List{
 			Members: members(
-				Item{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-				Item{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
-				Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-				Item{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
-				Item{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-				Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
-				Item{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-				Item{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+				Item{BareItem: bareItemInteger(123)},
+				Item{BareItem: bareItemDecimal(123.456)},
+				Item{BareItem: bareItemBoolean(false)},
+				Item{BareItem: bareItemBoolean(true)},
+				Item{BareItem: bareItemDate(123456)},
+				Item{BareItem: bareItemToken("token")},
+				Item{BareItem: bareItemString("string")},
+				Item{BareItem: bareItemDisplayString("display string")},
 			),
 		},
 	},
@@ -2633,26 +2633,26 @@ var parseListTestCases = []parseListTestCase{
 			Members: members(
 				InnerList{
 					Members: []Item{
-						{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-						{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+						{BareItem: bareItemInteger(123)},
+						{BareItem: bareItemDecimal(123.456)},
 					},
 				},
 				InnerList{
 					Members: []Item{
-						{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-						{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+						{BareItem: bareItemBoolean(false)},
+						{BareItem: bareItemBoolean(true)},
 					},
 				},
 				InnerList{
 					Members: []Item{
-						{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-						{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+						{BareItem: bareItemDate(123456)},
+						{BareItem: bareItemToken("token")},
 					},
 				},
 				InnerList{
 					Members: []Item{
-						{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-						{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+						{BareItem: bareItemString("string")},
+						{BareItem: bareItemDisplayString("display string")},
 					},
 				},
 			),
@@ -2663,20 +2663,20 @@ var parseListTestCases = []parseListTestCase{
 		input: `123,123.456,(?0 ?1),@123456,token,("string" %"display string")`,
 		want: List{
 			Members: members(
-				Item{BareItem: BareItem{Type: BareItemTypeInteger, Integer: 123}},
-				Item{BareItem: BareItem{Type: BareItemTypeDecimal, Decimal: 123.456}},
+				Item{BareItem: bareItemInteger(123)},
+				Item{BareItem: bareItemDecimal(123.456)},
 				InnerList{
 					Members: []Item{
-						{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: false}},
-						{BareItem: BareItem{Type: BareItemTypeBoolean, Boolean: true}},
+						{BareItem: bareItemBoolean(false)},
+						{BareItem: bareItemBoolean(true)},
 					},
 				},
-				Item{BareItem: BareItem{Type: BareItemTypeDate, Date: 123456}},
-				Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "token"}},
+				Item{BareItem: bareItemDate(123456)},
+				Item{BareItem: bareItemToken("token")},
 				InnerList{
 					Members: []Item{
-						{BareItem: BareItem{Type: BareItemTypeString, String: "string"}},
-						{BareItem: BareItem{Type: BareItemTypeDisplayString, DisplayString: "display string"}},
+						{BareItem: bareItemString("string")},
+						{BareItem: bareItemDisplayString("display string")},
 					},
 				},
 			),
@@ -2688,25 +2688,25 @@ var parseListTestCases = []parseListTestCase{
 		want: List{
 			Members: members(
 				Item{
-					BareItem: BareItem{Type: BareItemTypeToken, Token: "outer"},
+					BareItem: bareItemToken("outer"),
 					Parameters: params(
-						"a", BareItem{Type: BareItemTypeInteger, Integer: 3},
-						"b", BareItem{Type: BareItemTypeInteger, Integer: 2},
+						"a", bareItemInteger(3),
+						"b", bareItemInteger(2),
 					),
 				},
 				InnerList{
 					Members: []Item{
 						{
-							BareItem: BareItem{Type: BareItemTypeToken, Token: "inner"},
+							BareItem: bareItemToken("inner"),
 							Parameters: params(
-								"a", BareItem{Type: BareItemTypeInteger, Integer: 30},
-								"b", BareItem{Type: BareItemTypeInteger, Integer: 20},
+								"a", bareItemInteger(30),
+								"b", bareItemInteger(20),
 							),
 						},
 					},
 					Parameters: params(
-						"a", BareItem{Type: BareItemTypeInteger, Integer: 300},
-						"b", BareItem{Type: BareItemTypeInteger, Integer: 200},
+						"a", bareItemInteger(300),
+						"b", bareItemInteger(200),
 					),
 				},
 			),
@@ -2764,8 +2764,8 @@ var parseListTestCases = []parseListTestCase{
 		name:  "with trailing spaces",
 		input: `a, b   `,
 		want: List{Members: members(
-			Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "a"}},
-			Item{BareItem: BareItem{Type: BareItemTypeToken, Token: "b"}},
+			Item{BareItem: bareItemToken("a")},
+			Item{BareItem: bareItemToken("b")},
 		)},
 	},
 }
@@ -2808,16 +2808,16 @@ var serializeListTestCases = []serializeListTestCase{
 			InnerList{
 				Members: []Item{
 					{
-						BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+						BareItem: bareItemToken(`token`),
 						Parameters: params(
-							"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-							"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+							"key1", bareItemToken("value1"),
+							"key2", bareItemToken("value2"),
 						),
 					},
 				},
 				Parameters: params(
-					"key3", BareItem{Type: BareItemTypeToken, Token: "value3"},
-					"key4", BareItem{Type: BareItemTypeToken, Token: "value4"},
+					"key3", bareItemToken("value3"),
+					"key4", bareItemToken("value4"),
 				),
 			},
 		)},
@@ -2827,10 +2827,10 @@ var serializeListTestCases = []serializeListTestCase{
 		name: "single item",
 		input: List{Members: members(
 			Item{
-				BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+				BareItem: bareItemToken(`token`),
 				Parameters: params(
-					"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-					"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+					"key1", bareItemToken("value1"),
+					"key2", bareItemToken("value2"),
 				),
 			},
 		)},
@@ -2842,23 +2842,23 @@ var serializeListTestCases = []serializeListTestCase{
 			InnerList{
 				Members: []Item{
 					{
-						BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+						BareItem: bareItemToken(`token`),
 						Parameters: params(
-							"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-							"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+							"key1", bareItemToken("value1"),
+							"key2", bareItemToken("value2"),
 						),
 					},
 				},
 				Parameters: params(
-					"key3", BareItem{Type: BareItemTypeToken, Token: "value3"},
-					"key4", BareItem{Type: BareItemTypeToken, Token: "value4"},
+					"key3", bareItemToken("value3"),
+					"key4", bareItemToken("value4"),
 				),
 			},
 			Item{
-				BareItem: BareItem{Type: BareItemTypeToken, Token: `token`},
+				BareItem: bareItemToken(`token`),
 				Parameters: params(
-					"key1", BareItem{Type: BareItemTypeToken, Token: "value1"},
-					"key2", BareItem{Type: BareItemTypeToken, Token: "value2"},
+					"key1", bareItemToken("value1"),
+					"key2", bareItemToken("value2"),
 				),
 			},
 		)},
@@ -2868,7 +2868,7 @@ var serializeListTestCases = []serializeListTestCase{
 		name: "invalid inner list",
 		input: List{Members: members(
 			InnerList{Members: []Item{
-				{BareItem: BareItem{Type: BareItemTypeToken}},
+				{BareItem: bareItemToken("")},
 			}},
 		)},
 		wantError: ErrInvalidList,
@@ -2876,7 +2876,7 @@ var serializeListTestCases = []serializeListTestCase{
 	{
 		name: "invalid item",
 		input: List{Members: members(
-			Item{BareItem: BareItem{Type: BareItemTypeToken}},
+			Item{BareItem: bareItemToken("")},
 		)},
 		wantError: ErrInvalidList,
 	},
@@ -2951,34 +2951,34 @@ var parseParametersTestCases = []parseParametersTestCase{
 	{
 		name:  "single",
 		input: `; key=value`,
-		want:  params("key", BareItem{Type: BareItemTypeToken, Token: `value`}),
+		want:  params("key", bareItemToken(`value`)),
 	},
 	{
 		name:  "multiple",
 		input: `; key1=value1; key2="value2"; key3=%"value3"; key4=:dGVzdA==:; key5=?0; key6=?1; key7=@123456; key8=123; key9=123.456; key1=overridden`,
 		want: params(
-			"key1", BareItem{Type: BareItemTypeToken, Token: `overridden`},
-			"key2", BareItem{Type: BareItemTypeString, String: `value2`},
-			"key3", BareItem{Type: BareItemTypeDisplayString, DisplayString: `value3`},
-			"key4", BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
-			"key5", BareItem{Type: BareItemTypeBoolean, Boolean: false},
-			"key6", BareItem{Type: BareItemTypeBoolean, Boolean: true},
-			"key7", BareItem{Type: BareItemTypeDate, Date: 123456},
-			"key8", BareItem{Type: BareItemTypeInteger, Integer: 123},
-			"key9", BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+			"key1", bareItemToken(`overridden`),
+			"key2", bareItemString(`value2`),
+			"key3", bareItemDisplayString(`value3`),
+			"key4", bareItemByteSequence([]byte("test")),
+			"key5", bareItemBoolean(false),
+			"key6", bareItemBoolean(true),
+			"key7", bareItemDate(123456),
+			"key8", bareItemInteger(123),
+			"key9", bareItemDecimal(123.456),
 		),
 	},
 	{
 		name:  "complex key",
 		input: "; *key_with-many.chars_*=1",
-		want:  params("*key_with-many.chars_*", BareItem{Type: BareItemTypeInteger, Integer: 1}),
+		want:  params("*key_with-many.chars_*", bareItemInteger(1)),
 	},
 	{
 		name:  "boolean parameter",
 		input: "; bool; non-bool=1",
 		want: params(
-			"bool", BareItem{Type: BareItemTypeBoolean, Boolean: true},
-			"non-bool", BareItem{Type: BareItemTypeInteger, Integer: 1},
+			"bool", bareItemBoolean(true),
+			"non-bool", bareItemInteger(1),
 		),
 	},
 	{
@@ -3021,32 +3021,32 @@ var serializeParametersTestCases = []serializeParametersTestCase{
 	},
 	{
 		name:  "single parameter",
-		input: params("key1", BareItem{Type: BareItemTypeToken, Token: `value1`}),
+		input: params("key1", bareItemToken(`value1`)),
 		want:  `;key1=value1`,
 	},
 	{
 		name: "multiple parameter",
 		input: params(
-			"key1", BareItem{Type: BareItemTypeToken, Token: `value1`},
-			"key2", BareItem{Type: BareItemTypeString, String: `value2`},
-			"key3", BareItem{Type: BareItemTypeDisplayString, DisplayString: `value3`},
-			"key4", BareItem{Type: BareItemTypeByteSequence, ByteSequence: []byte("test")},
-			"key5", BareItem{Type: BareItemTypeBoolean, Boolean: false},
-			"key6", BareItem{Type: BareItemTypeBoolean, Boolean: true},
-			"key7", BareItem{Type: BareItemTypeDate, Date: 123456},
-			"key8", BareItem{Type: BareItemTypeInteger, Integer: 123},
-			"key9", BareItem{Type: BareItemTypeDecimal, Decimal: 123.456},
+			"key1", bareItemToken(`value1`),
+			"key2", bareItemString(`value2`),
+			"key3", bareItemDisplayString(`value3`),
+			"key4", bareItemByteSequence([]byte("test")),
+			"key5", bareItemBoolean(false),
+			"key6", bareItemBoolean(true),
+			"key7", bareItemDate(123456),
+			"key8", bareItemInteger(123),
+			"key9", bareItemDecimal(123.456),
 		),
 		want: `;key1=value1;key2="value2";key3=%"value3";key4=:dGVzdA==:;key5=?0;key6;key7=@123456;key8=123;key9=123.456`,
 	},
 	{
 		name:      "invalid key",
-		input:     params("", BareItem{Type: BareItemTypeToken, Token: `value1`}),
+		input:     params("", bareItemToken(`value1`)),
 		wantError: ErrInvalidParameters,
 	},
 	{
 		name:      "invalid value",
-		input:     params("key1", BareItem{Type: BareItemTypeToken, Token: ``}),
+		input:     params("key1", bareItemToken(``)),
 		wantError: ErrInvalidParameters,
 	},
 }

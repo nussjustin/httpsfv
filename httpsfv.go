@@ -394,6 +394,38 @@ const (
 	BareItemTypeToken
 )
 
+func bareItemInteger(i int64) BareItem {
+	return BareItem{Type: BareItemTypeInteger, Integer: i}
+}
+
+func bareItemDecimal(d float64) BareItem {
+	return BareItem{Type: BareItemTypeDecimal, Decimal: d}
+}
+
+func bareItemString(s string) BareItem {
+	return BareItem{Type: BareItemTypeString, String: s}
+}
+
+func bareItemToken(t string) BareItem {
+	return BareItem{Type: BareItemTypeToken, Token: t}
+}
+
+func bareItemByteSequence(bs []byte) BareItem {
+	return BareItem{Type: BareItemTypeByteSequence, ByteSequence: bs}
+}
+
+func bareItemBoolean(b bool) BareItem {
+	return BareItem{Type: BareItemTypeBoolean, Boolean: b}
+}
+
+func bareItemDate(d int64) BareItem {
+	return BareItem{Type: BareItemTypeDate, Date: d}
+}
+
+func bareItemDisplayString(d string) BareItem {
+	return BareItem{Type: BareItemTypeDisplayString, DisplayString: d}
+}
+
 // parseBareItem parses a single bare item as specified in RFC 9651 section 4.3.2.1 "Parsing an Item".
 func parseBareItem(inputString string) (v BareItem, rest string, err error) {
 	if len(inputString) == 0 {
