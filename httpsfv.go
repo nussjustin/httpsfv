@@ -1584,6 +1584,18 @@ const (
 	ItemOrInnerListTypeItem
 )
 
+// ItemOrInnerListFrom wraps t in the tagged union ItemOrInnerList.
+func ItemOrInnerListFrom[T InnerList | Item](t T) ItemOrInnerList {
+	switch v := any(t).(type) {
+	case InnerList:
+		return ItemOrInnerList{Type: ItemOrInnerListTypeInnerList, InnerList: v}
+	case Item:
+		return ItemOrInnerList{Type: ItemOrInnerListTypeItem, Item: v}
+	default:
+		panic("unreachable")
+	}
+}
+
 // parseList parses an item or inner list as specified in RFC 9651 section 4.2.1.1 "Parsing an Item or Inner List".
 func parseItemOrInnerList(inputString string) (v ItemOrInnerList, rest string, err error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#parse-item-or-list

@@ -86,9 +86,9 @@ func members(member ...any) []ItemOrInnerList {
 	for _, m := range member {
 		switch v := m.(type) {
 		case InnerList:
-			ms = append(ms, ItemOrInnerList{Type: ItemOrInnerListTypeInnerList, InnerList: v})
+			ms = append(ms, ItemOrInnerListFrom(v))
 		case Item:
-			ms = append(ms, ItemOrInnerList{Type: ItemOrInnerListTypeItem, Item: v})
+			ms = append(ms, ItemOrInnerListFrom(v))
 		default:
 			panic(fmt.Sprintf("unexpected value of type %T", v))
 		}
