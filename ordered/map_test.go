@@ -1,16 +1,26 @@
-package ordered_test
+package ordered
 
 import (
 	"slices"
 	"testing"
-
-	"github.com/nussjustin/httpsfv/ordered"
 )
 
 func TestMap(t *testing.T) {
-	var m ordered.Map[string, int]
+	t.Run("Map", func(t *testing.T) {
+		testMapImpl(t, &Map[string, int]{})
+	})
 
-	if got, want := collect(&m), []pair[string, int]{}; !slices.Equal(got, want) {
+	t.Run("hashMap", func(t *testing.T) {
+		testMapImpl(t, &hashMap[string, int]{})
+	})
+
+	t.Run("sliceMap", func(t *testing.T) {
+		testMapImpl(t, &sliceMap[string, int]{})
+	})
+}
+
+func testMapImpl[M mapIface[string, int]](t *testing.T, m M) {
+	if got, want := collect(m), []pair[string, int]{}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
 	}
 
@@ -38,7 +48,7 @@ func TestMap(t *testing.T) {
 		m.Set(key, i+1)
 	}
 
-	if got, want := collect(&m), []pair[string, int]{{"key1", 1}, {"key3", 2}, {"key2", 3}}; !slices.Equal(got, want) {
+	if got, want := collect(m), []pair[string, int]{{"key1", 1}, {"key3", 2}, {"key2", 3}}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
 	}
 
@@ -84,7 +94,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("m.Got(%q) = (%d, %t); want (%d, %t)", "key1", got, gotOk, -1, true)
 	}
 
-	if got, want := collect(&m), []pair[string, int]{{"key1", -1}, {"key3", 2}, {"key2", 3}}; !slices.Equal(got, want) {
+	if got, want := collect(m), []pair[string, int]{{"key1", -1}, {"key3", 2}, {"key2", 3}}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
 	}
 
@@ -96,7 +106,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("m.Delete(%q) = (%t); want (%t)", "key1", got, want)
 	}
 
-	if got, want := collect(&m), []pair[string, int]{{"key3", 2}, {"key2", 3}}; !slices.Equal(got, want) {
+	if got, want := collect(m), []pair[string, int]{{"key3", 2}, {"key2", 3}}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
 	}
 
@@ -118,7 +128,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("m.Got(%q) = (%d, %t); want (%d, %t)", "key1", got, gotOk, 1, true)
 	}
 
-	if got, want := collect(&m), []pair[string, int]{{"key3", 2}, {"key2", 3}, {"key1", 1}}; !slices.Equal(got, want) {
+	if got, want := collect(m), []pair[string, int]{{"key3", 2}, {"key2", 3}, {"key1", 1}}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
 	}
 }
@@ -128,7 +138,7 @@ type pair[K any, V any] struct {
 	value V
 }
 
-func collect[K comparable, V any](m *ordered.Map[K, V]) []pair[K, V] {
+func collect[K comparable, V any](m mapIface[K, V]) []pair[K, V] {
 	var s []pair[K, V]
 	for k, v := range m.All() {
 		s = append(s, pair[K, V]{k, v})
