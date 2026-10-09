@@ -158,7 +158,7 @@ func Parse[T Dictionary | Item | List](inputString string) (T, error) {
 	return result, nil
 }
 
-// ParseLines is like [Parse] but validates takes a list of inputs, generally each specified header line for the given
+// ParseLines is like [Parse] but takes a list of inputs, generally each specified header line for the given
 // header, and validates that each string can be parsed without the other strings.
 //
 // If any input string cannot be parsed, an error is returned.
