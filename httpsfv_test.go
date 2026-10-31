@@ -117,7 +117,7 @@ func params(args ...any) Parameters {
 
 	var p Parameters
 
-	for i := 0; i < len(args); i += 2 {
+	for i := 0; i < len(args)-1; i += 2 {
 		key, value := args[i].(string), args[i+1].(BareItem)
 		p.Set(key, value)
 	}
@@ -130,7 +130,7 @@ func TestParse_Dictionary(t *testing.T) {
 		{
 			name:      "non-ascii",
 			input:     `"hêllo"`,
-			wantError: ErrNonAsciiInput,
+			wantError: ErrNonASCIIInput,
 		},
 		{
 			name:      "invalid key",
@@ -183,7 +183,7 @@ func TestParse_Item(t *testing.T) {
 		{
 			name:      "non-ascii",
 			input:     `"hêllo"`,
-			wantError: ErrNonAsciiInput,
+			wantError: ErrNonASCIIInput,
 		},
 		{
 			name:      "invalid bare item",
@@ -238,7 +238,7 @@ func TestParse_List(t *testing.T) {
 		{
 			name:      "non-ascii",
 			input:     `"hêllo"`,
-			wantError: ErrNonAsciiInput,
+			wantError: ErrNonASCIIInput,
 		},
 		{
 			name:      "invalid bare item",
@@ -392,7 +392,7 @@ func FuzzParse_Dictionary(f *testing.F) {
 		f.Add(input)
 	}
 
-	f.Fuzz(func(t *testing.T, inputString string) {
+	f.Fuzz(func(_ *testing.T, inputString string) {
 		_, _ = Parse[Dictionary](inputString)
 	})
 }
@@ -402,7 +402,7 @@ func FuzzParse_Item(f *testing.F) {
 		f.Add(input)
 	}
 
-	f.Fuzz(func(t *testing.T, inputString string) {
+	f.Fuzz(func(_ *testing.T, inputString string) {
 		_, _ = Parse[Item](inputString)
 	})
 }
@@ -412,7 +412,7 @@ func FuzzParse_List(f *testing.F) {
 		f.Add(input)
 	}
 
-	f.Fuzz(func(t *testing.T, inputString string) {
+	f.Fuzz(func(_ *testing.T, inputString string) {
 		_, _ = Parse[List](inputString)
 	})
 }
@@ -1280,7 +1280,8 @@ var serializeBareItemTokenTestCases = []serializeBareItemTestCase{
 		name:      "invalid start",
 		input:     BareItemToken(`\`),
 		wantError: ErrInvalidToken,
-	}, {
+	},
+	{
 		name:      "invalid characters",
 		input:     BareItemToken(`a b`),
 		wantError: ErrInvalidToken,

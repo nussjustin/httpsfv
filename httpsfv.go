@@ -71,8 +71,8 @@ var (
 	// ErrInvalidToken is returned when parsing a token fails.
 	ErrInvalidToken = errors.New("invalid token")
 
-	// ErrNonAsciiInput is returned when parsing a structured field containing non-ASCII characters.
-	ErrNonAsciiInput = errors.New("non-ascii input")
+	// ErrNonASCIIInput is returned when parsing a structured field containing non-ASCII characters.
+	ErrNonASCIIInput = errors.New("non-ascii input")
 
 	// ErrTrailingData is returned when parsing a structured field containing trailing data.
 	ErrTrailingData = errors.New("trailing data")
@@ -113,7 +113,7 @@ func Parse[T Dictionary | Item | List](inputString string) (T, error) {
 	// Note: We take a string, so we do not need to convert anything, but we must still check if the string contains only ASCII.
 	if !isASCII(inputString) {
 		var zero T
-		return zero, ErrNonAsciiInput
+		return zero, ErrNonASCIIInput
 	}
 
 	// 2. Discard any leading SP characters from input_string.
@@ -327,7 +327,7 @@ func serializeKey(dst []byte, inputKey string) ([]byte, error) {
 	//
 	// 1. Convert input_key into a sequence of ASCII characters; if conversion fails, fail serialization.
 	if !isASCII(inputKey) {
-		return nil, prefixError(ErrInvalidKey, ErrNonAsciiInput)
+		return nil, prefixError(ErrInvalidKey, ErrNonASCIIInput)
 	}
 
 	// 2. If input_key contains characters not in lcalpha, DIGIT, "_", "-", ".", or "*", fail serialization.
@@ -463,6 +463,8 @@ func serializeBareItem(dst []byte, b BareItem) ([]byte, error) {
 		return serializeBareItemDate(dst, b.Date())
 	case BareItemTypeDisplayString:
 		return serializeBareItemDisplayString(dst, b.DisplayString())
+	case BareItemTypeInvalid:
+		fallthrough
 	default:
 		panic(fmt.Sprintf("unknown BareItem type: %d", b.typ))
 	}
@@ -470,6 +472,7 @@ func serializeBareItem(dst []byte, b BareItem) ([]byte, error) {
 
 // BareItemInteger returns a BareItem holding the given integer value.
 func BareItemInteger(i int64) BareItem {
+	//nolint:gosec
 	return BareItem{typ: BareItemTypeInteger, num: uint64(i)}
 }
 
@@ -480,6 +483,7 @@ func (b *BareItem) Integer() int64 {
 	if b.typ != BareItemTypeInteger {
 		panic("BareItem is not an integer")
 	}
+	//nolint:gosec
 	return int64(b.num)
 }
 
@@ -577,6 +581,7 @@ func (b *BareItem) Boolean() bool {
 //
 // No validation is performed on the value, and serializing the value may fail if it is not valid.
 func BareItemDate(d int64) BareItem {
+	//nolint:gosec
 	return BareItem{typ: BareItemTypeDate, num: uint64(d)}
 }
 
@@ -587,6 +592,7 @@ func (b *BareItem) Date() int64 {
 	if b.typ != BareItemTypeDate {
 		panic("BareItem is not a date")
 	}
+	//nolint:gosec
 	return int64(b.num)
 }
 
@@ -848,7 +854,7 @@ func serializeBareItemString(dst []byte, inputString string) ([]byte, error) {
 	//
 	// 1. Convert input_string into a sequence of ASCII characters; if conversion fails, fail serialization.
 	if !isASCII(inputString) {
-		return nil, prefixError(ErrInvalidString, ErrNonAsciiInput)
+		return nil, prefixError(ErrInvalidString, ErrNonASCIIInput)
 	}
 
 	var toEscape int
@@ -867,7 +873,8 @@ func serializeBareItemString(dst []byte, inputString string) ([]byte, error) {
 	dst = slices.Grow(dst, len(inputString)+2+toEscape)
 
 	// 3. Let output be the string DQUOTE.
-	output := append(dst, '"')
+	output := dst
+	output = append(output, '"')
 
 	// 4. For each character char in input_string:
 	if toEscape == 0 {
@@ -934,7 +941,7 @@ func serializeBareItemToken(dst []byte, inputToken string) ([]byte, error) {
 	//
 	// 1. Convert input_token into a sequence of ASCII characters; if conversion fails, fail serialization.
 	if !isASCII(inputToken) {
-		return nil, prefixError(ErrInvalidToken, ErrNonAsciiInput)
+		return nil, prefixError(ErrInvalidToken, ErrNonASCIIInput)
 	}
 
 	// 2. If the first character of input_token is not ALPHA or "*", or the remaining portion contains a character not
@@ -1115,7 +1122,8 @@ func serializeBareItemDate(dst []byte, inputDate int64) ([]byte, error) {
 	// https://www.rfc-editor.org/info/rfc9651/#section-4.1.10
 	//
 	// 1. Let output be "@".
-	output := append(dst, '@')
+	output := dst
+	output = append(output, '@')
 
 	// 2. Append to output the result of running Serializing an Integer with input_date (Section 4.1.4).
 	output, err := serializeBareItemInteger(output, inputDate)
@@ -1164,11 +1172,11 @@ func parseBareItemDisplayString(inputString string) (v BareItem, rest string, er
 			curr += 2
 
 			// 2. if octet_hex contains characters outside the range %x30-39 or %x61-66 (i.e., it is not in 0-9 or lowercase a-f), fail parsing.
-			// nolint:staticcheck
+			//nolint:staticcheck
 			if c := octetHex[0]; !((c >= 0x30 && c <= 0x39) || (c >= 0x61 && c <= 0x66)) {
 				return BareItem{}, "", fmt.Errorf("%w: invalid hex character", ErrInvalidDisplayString)
 			}
-			// nolint:staticcheck
+			//nolint:staticcheck
 			if c := octetHex[1]; !((c >= 0x30 && c <= 0x39) || (c >= 0x61 && c <= 0x66)) {
 				return BareItem{}, "", fmt.Errorf("%w: invalid hex character", ErrInvalidDisplayString)
 			}
@@ -1242,6 +1250,7 @@ func serializeBareItemDisplayString(dst []byte, inputSequence string) ([]byte, e
 
 		i += sz
 
+		//nolint:gosec
 		if sz > 1 || (byte(r) == '%' || byte(r) == _DQUOTE || byte(r) <= 0x1f || byte(r) >= 0x7f) {
 			nonASCII++
 		}
@@ -1254,7 +1263,8 @@ func serializeBareItemDisplayString(dst []byte, inputSequence string) ([]byte, e
 	dst = slices.Grow(dst, 3+len(byteArray)+2*nonASCII)
 
 	// 3. Let encoded_string be a string containing "%" followed by DQUOTE.
-	encodedString := append(dst, '%', _DQUOTE)
+	encodedString := dst
+	encodedString = append(encodedString, '%', _DQUOTE)
 
 	// 4. For each byte in byte_array:
 	if nonASCII == 0 {
@@ -1325,6 +1335,8 @@ func (t BareItemType) String() string {
 		return "String"
 	case BareItemTypeToken:
 		return "Token"
+	case BareItemTypeInvalid:
+		fallthrough
 	default:
 		panic(fmt.Sprintf("unknown BareItemType %d", uint8(t)))
 	}
@@ -1552,7 +1564,8 @@ func serializeInnerList(dst []byte, il InnerList) ([]byte, error) {
 	// From https://www.rfc-editor.org/info/rfc9651/#name-serializing-an-inner-list
 	//
 	// 1. Let output be the string "(".
-	output := append(dst, '(')
+	output := dst
+	output = append(output, '(')
 
 	// 2. For each (member_value, parameters) of inner_list:
 	for i, member := range il.Members {
