@@ -52,6 +52,15 @@ func (m *Map[K, V]) At(idx int) (V, bool) {
 	return m.impl.At(idx)
 }
 
+// Clear removes all entries from the map.
+func (m *Map[K, V]) Clear() {
+	if m.impl == nil {
+		return
+	}
+
+	m.impl.Clear()
+}
+
 // Contains returns whether the given key exists in the map.
 func (m *Map[K, V]) Contains(key K) bool {
 	if m.impl == nil {
@@ -113,6 +122,7 @@ func (m *Map[K, V]) Set(key K, value V) {
 type mapIface[K comparable, V any] interface {
 	All() iter.Seq2[K, V]
 	At(idx int) (V, bool)
+	Clear()
 	Contains(key K) bool
 	Delete(key K) bool
 	Get(key K) (V, bool)
@@ -129,9 +139,9 @@ type sliceMapEntry[K comparable, V any] struct {
 	value V
 }
 
-func (f *sliceMap[K, V]) All() iter.Seq2[K, V] {
+func (m *sliceMap[K, V]) All() iter.Seq2[K, V] {
 	return func(yield func(K, V) bool) {
-		for _, e := range f.s {
+		for _, e := range m.s {
 			if !yield(e.key, e.value) {
 				return
 			}
@@ -139,16 +149,21 @@ func (f *sliceMap[K, V]) All() iter.Seq2[K, V] {
 	}
 }
 
-func (f *sliceMap[K, V]) At(idx int) (V, bool) {
-	if idx >= len(f.s) {
+func (m *sliceMap[K, V]) At(idx int) (V, bool) {
+	if idx >= len(m.s) {
 		var zero V
 		return zero, false
 	}
-	return f.s[idx].value, true
+	return m.s[idx].value, true
 }
 
-func (f *sliceMap[K, V]) Contains(key K) bool {
-	for _, e := range f.s {
+func (m *sliceMap[K, V]) Clear() {
+	clear(m.s)
+	m.s = m.s[:0]
+}
+
+func (m *sliceMap[K, V]) Contains(key K) bool {
+	for _, e := range m.s {
 		if e.key == key {
 			return true
 		}
@@ -157,21 +172,21 @@ func (f *sliceMap[K, V]) Contains(key K) bool {
 	return false
 }
 
-func (f *sliceMap[K, V]) Delete(key K) bool {
-	for i, e := range f.s {
+func (m *sliceMap[K, V]) Delete(key K) bool {
+	for i, e := range m.s {
 		if e.key != key {
 			continue
 		}
 
-		f.s = slices.Delete(f.s, i, 1)
+		m.s = slices.Delete(m.s, i, 1)
 		return true
 	}
 
 	return false
 }
 
-func (f *sliceMap[K, V]) Get(key K) (V, bool) {
-	for _, e := range f.s {
+func (m *sliceMap[K, V]) Get(key K) (V, bool) {
+	for _, e := range m.s {
 		if e.key != key {
 			continue
 		}
@@ -183,21 +198,21 @@ func (f *sliceMap[K, V]) Get(key K) (V, bool) {
 	return zero, false
 }
 
-func (f *sliceMap[K, V]) Len() int {
-	return len(f.s)
+func (m *sliceMap[K, V]) Len() int {
+	return len(m.s)
 }
 
-func (f *sliceMap[K, V]) Set(key K, value V) {
-	for i, e := range f.s {
+func (m *sliceMap[K, V]) Set(key K, value V) {
+	for i, e := range m.s {
 		if e.key != key {
 			continue
 		}
 
-		f.s[i].value = value
+		m.s[i].value = value
 		return
 	}
 
-	f.s = append(f.s, sliceMapEntry[K, V]{key: key, value: value})
+	m.s = append(m.s, sliceMapEntry[K, V]{key: key, value: value})
 }
 
 type hashMap[K comparable, V any] struct {
@@ -234,6 +249,12 @@ func (m *hashMap[K, V]) At(idx int) (V, bool) {
 		return zero, false
 	}
 	return m.Get(m.keys[idx])
+}
+
+func (m *hashMap[K, V]) Clear() {
+	clear(m.keys)
+	m.keys = m.keys[:0]
+	clear(m.m)
 }
 
 func (m *hashMap[K, V]) Contains(key K) bool {

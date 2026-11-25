@@ -132,6 +132,16 @@ func testMapImpl[M mapIface[string, int]](t *testing.T, m M) {
 	if got, want := collect(m), []pair[string, int]{{"key3", 2}, {"key2", 3}, {"key1", 1}}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
 	}
+
+	m.Clear()
+
+	if got, want := m.Len(), 0; got != want {
+		t.Errorf("Len() = %d, want %d", got, want)
+	}
+
+	if got, want := collect(m), []pair[string, int]{}; !slices.Equal(got, want) {
+		t.Errorf("m.All() = %v, want %v", got, want)
+	}
 }
 
 func BenchmarkMap_All(b *testing.B) {
