@@ -1,6 +1,7 @@
 package ordered
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -130,6 +131,38 @@ func testMapImpl[M mapIface[string, int]](t *testing.T, m M) {
 
 	if got, want := collect(m), []pair[string, int]{{"key3", 2}, {"key2", 3}, {"key1", 1}}; !slices.Equal(got, want) {
 		t.Errorf("m.All() = %v, want %v", got, want)
+	}
+}
+
+func BenchmarkMap_All(b *testing.B) {
+	b.Run("hashMap", func(b *testing.B) {
+		benchmarkMapAll(b, &hashMap[string, int]{})
+	})
+
+	b.Run("sliceMap", func(b *testing.B) {
+		benchmarkMapAll(b, &sliceMap[string, int]{})
+	})
+}
+
+func benchmarkMapAll[M mapIface[string, int]](b *testing.B, impl M) {
+	for i := range 32 {
+		impl.Set(fmt.Sprintf("key-%d", i), i)
+	}
+
+	m := &Map[string, int]{impl: impl}
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		var total int
+
+		for range m.All() {
+			total++
+		}
+
+		if total != 32 {
+			b.Errorf("total mismatch: got %d, want %d", total, 32)
+		}
 	}
 }
 

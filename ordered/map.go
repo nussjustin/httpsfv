@@ -21,10 +21,23 @@ func (m *Map[K, V]) All() iter.Seq2[K, V] {
 			return
 		}
 
-		for k, v := range m.impl.All() {
-			if !yield(k, v) {
-				return
+		// Specialize to avoid allocation
+		switch x := m.impl.(type) {
+		case nil:
+		case *hashMap[K, V]:
+			for _, key := range x.keys {
+				if !yield(key, x.m[key]) {
+					return
+				}
 			}
+		case *sliceMap[K, V]:
+			for _, e := range x.s {
+				if !yield(e.key, e.value) {
+					return
+				}
+			}
+		default:
+			panic("unreachable")
 		}
 	}
 }
